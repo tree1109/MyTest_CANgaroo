@@ -153,6 +153,7 @@ void Backend::loadDefaultSetup(MeasurementSetup &setup)
 
             MeasurementInterface *mi = new MeasurementInterface();
             mi->setBusInterface(intf);
+            mi->setResolved(true);
             BusInterface *canIntf = getInterfaceById(intf);
             if (canIntf)
                 mi->setBusType(canIntf->busType());
@@ -219,6 +220,8 @@ BusInterfaceIdList Backend::getInterfaceList()
 
 CanDriver *Backend::getDriverById(BusInterfaceId id)
 {
+    if (id == InvalidBusInterfaceId)
+        return nullptr;
     int driverIdx = (id >> 8) & 0xFF;
     if (driverIdx >= _drivers.size())
     {

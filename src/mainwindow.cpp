@@ -270,8 +270,8 @@ void MainWindow::initAppearance()
     ThemeManager::instance().applyTheme(isDarkMode() ? ThemeManager::Dark : ThemeManager::Light);
 
     // Load saved font size.
-    const int savedFontSize = settings.value("ui/fontSize", 0).toInt();
-    if (savedFontSize > 0)
+    const int savedFontSize = settings.value("ui/fontSize", 6).toInt();
+    if (savedFontSize > 6)
         applyFontSize(savedFontSize);
 }
 

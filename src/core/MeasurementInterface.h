@@ -131,9 +131,19 @@ public:
 
     uint32_t customFdBitrate() const;
     void setCustomFdBitrate(uint32_t customFdBitrate);
+
+    bool isResolved() const noexcept;
+    void setResolved(bool resolved) noexcept;
+    QString savedDriverName() const;
+    QString savedInterfaceName() const;
+
 private:
     BusType        _busType;
     BusInterfaceId _busif;
+
+    bool    _isResolved {false};
+    QString _savedDriverName;
+    QString _savedInterfaceName;
 
     bool _doConfigure;
     bool _enabled;

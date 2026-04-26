@@ -63,6 +63,9 @@ bool MeasurementInterface::loadXML(Backend &backend, QDomElement &el)
 {
     (void) backend;
 
+    _savedDriverName = el.attribute("driver");
+    _savedInterfaceName = el.attribute("name");
+
     _busType = (el.attribute("bus-type", "can") == "lin") ? BusType::LIN : BusType::CAN;
 
     _doConfigure = el.attribute("configure", "0").toInt() != 0;
@@ -105,10 +108,16 @@ bool MeasurementInterface::saveXML(Backend &backend, QDomDocument &xml, QDomElem
 {
     (void) xml;
 
+    if (_isResolved)
+    {
+        _savedDriverName = backend.getDriverName(_busif);
+        _savedInterfaceName = backend.getInterfaceName(_busif);
+    }
+
     root.setAttribute("bus-type", _busType == BusType::LIN ? "lin" : "can");
     root.setAttribute("type", _busType == BusType::LIN ? "lin" : "can");
-    root.setAttribute("driver", backend.getDriverName(_busif));
-    root.setAttribute("name", backend.getInterfaceName(_busif));
+    root.setAttribute("driver", _savedDriverName);
+    root.setAttribute("name", _savedInterfaceName);
 
     root.setAttribute("configure", _doConfigure ? 1 : 0);
 
@@ -323,6 +332,11 @@ void MeasurementInterface::setEnabled(bool enabled) noexcept
 
 BusType MeasurementInterface::busType() const { return _busType; }
 void    MeasurementInterface::setBusType(BusType type) { _busType = type; }
+
+bool    MeasurementInterface::isResolved() const noexcept { return _isResolved; }
+void    MeasurementInterface::setResolved(bool resolved) noexcept { _isResolved = resolved; }
+QString MeasurementInterface::savedDriverName() const { return _savedDriverName; }
+QString MeasurementInterface::savedInterfaceName() const { return _savedInterfaceName; }
 
 unsigned MeasurementInterface::linBaudRate() const { return _linBaudRate; }
 void     MeasurementInterface::setLinBaudRate(unsigned baud) { _linBaudRate = baud; }

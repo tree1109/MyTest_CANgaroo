@@ -24,7 +24,7 @@ SettingsDialog::SettingsDialog(QSettings &settings, QActionGroup *languageGroup,
     QStringList styles = QStyleFactory::keys();
     m_themeCombo->addItems(styles);
 
-    QString currentStyle = QApplication::style()->objectName();
+    const QString currentStyle = settings.value("ui/applicationStyle", QApplication::style()->name()).toString();
     for (int i = 0; i < styles.size(); ++i)
     {
         if (styles[i].compare(currentStyle, Qt::CaseInsensitive) == 0)

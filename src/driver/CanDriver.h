@@ -31,6 +31,8 @@ class BusInterface;
 using BusInterfaceId = uint16_t;
 using BusInterfaceIdList = QList<uint16_t>;
 
+constexpr BusInterfaceId InvalidBusInterfaceId = 0xFFFF;
+
 class CanDriver {
 public:
     CanDriver(Backend &backend);

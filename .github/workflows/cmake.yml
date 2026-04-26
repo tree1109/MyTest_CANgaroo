@@ -162,13 +162,22 @@ jobs:
           cp src/assets/cangaroo.png "${DEB_DIR}/usr/share/icons/hicolor/256x256/apps/"
           cp debian/10-cangaroo-socketcan.rules "${DEB_DIR}/usr/share/polkit-1/rules.d/"
 
+          # Bundle libcanlib (built from Kvaser linuxcan source above)
+          mkdir -p "${DEB_DIR}/usr/lib/x86_64-linux-gnu"
+          find /usr/lib /usr/local/lib -maxdepth 2 -name "libcanlib*.so*" 2>/dev/null | while IFS= read -r f; do
+            cp -Pv "$f" "${DEB_DIR}/usr/lib/x86_64-linux-gnu/"
+          done
+
+          printf '#!/bin/sh\nset -e\nldconfig\n' > "${DEB_DIR}/DEBIAN/postinst"
+          chmod 755 "${DEB_DIR}/DEBIAN/postinst"
+
           cat > "${DEB_DIR}/DEBIAN/control" << EOF
           Package: ${PKG_NAME}
           Version: ${PKG_VERSION}
           Section: utils
           Priority: optional
           Architecture: ${PKG_ARCH}
-          Depends: libqt6core6t64, libqt6gui6t64, libqt6widgets6t64, libqt6serialport6, libqt6serialbus6, libqt6charts6, libnl-3-200, libnl-route-3-200, libcanlib (>= 5.0), policykit-1, iproute2
+          Depends: libqt6core6t64, libqt6gui6t64, libqt6widgets6t64, libqt6serialport6, libqt6serialbus6, libqt6charts6, libnl-3-200, libnl-route-3-200, policykit-1, iproute2
           Maintainer: Schildkroet <https://github.com/Schildkroet>
           Description: CAN bus analyzer and visualization tool
            CANgaroo is an open-source CAN bus analyzer with support for

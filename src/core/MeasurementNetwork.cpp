@@ -63,6 +63,7 @@ MeasurementInterface *MeasurementNetwork::addBusInterface(BusInterfaceId busif)
 {
     MeasurementInterface *mi = new MeasurementInterface();
     mi->setBusInterface(busif);
+    mi->setResolved(true);
     addInterface(mi);
     return mi;
 }
@@ -174,15 +175,23 @@ bool MeasurementNetwork::loadXML(Backend &backend, QDomElement el)
     QDomNodeList ifList = el.firstChildElement("interfaces").elementsByTagName("interface");
     for (int i=0; i<ifList.length(); i++) {
         QDomElement elIntf = ifList.item(i).toElement();
-        QString driverName = elIntf.attribute("driver");
-        QString deviceName = elIntf.attribute("name");
+        const QString driverName = elIntf.attribute("driver");
+        const QString deviceName = elIntf.attribute("name");
+
+        MeasurementInterface *mi = new MeasurementInterface();
+        mi->loadXML(backend, elIntf);
+
         BusInterface *intf = backend.getInterfaceByDriverAndName(driverName, deviceName);
         if (intf) {
-            MeasurementInterface *mi = addBusInterface(intf->getId());
-            mi->loadXML(backend, elIntf);
+            mi->setBusInterface(intf->getId());
+            mi->setResolved(true);
         } else {
-            log_error(QString("Could not find interface %1/%2, which is referenced in the workspace config file.").arg(driverName, deviceName));
+            mi->setBusInterface(InvalidBusInterfaceId);
+            mi->setResolved(false);
+            log_warning(QString("Interface %1/%2 not found; settings preserved but interface is unavailable.").arg(driverName, deviceName));
         }
+
+        addInterface(mi);
     }
 
 

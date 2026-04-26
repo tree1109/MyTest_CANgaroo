@@ -73,8 +73,12 @@ QVariant SetupDialogTreeItem::dataInterface(const QModelIndex &index) const
 {
     switch (index.column()) {
         case SetupDialogTreeModel::column_device:
+            if (!intf->isResolved())
+                return QObject::tr("(unavailable) %1").arg(intf->savedInterfaceName());
             return _backend->getInterfaceName(intf->busInterface());
         case SetupDialogTreeModel::column_driver:
+            if (!intf->isResolved())
+                return intf->savedDriverName();
             return _backend->getDriverName(intf->busInterface());
         case SetupDialogTreeModel::column_bitrate:
             return (intf->busType() == BusType::LIN)
