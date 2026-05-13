@@ -3,17 +3,17 @@
   Copyright (c) 2016 Hubert Denkmair <hubert@denkmair.de>
 
   This file is part of the candle windows API.
-  
+
   This library is free software: you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
   License as published by the Free Software Foundation, either
   version 3 of the License, or (at your option) any later version.
- 
+
   This library is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
   Lesser General Public License for more details.
- 
+
   You should have received a copy of the GNU Lesser General Public
   License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
@@ -79,6 +79,8 @@ typedef struct {
 
     candle_device_config_t dconf;
     candle_capability_t bt_const;
+    /* Per-channel capabilities: index 0..dconf.icount, maximum 8 channels */
+    candle_capability_t ch_caps[8];
     canlde_rx_urb rxurbs[CANDLE_URB_COUNT];
     HANDLE rxevents[CANDLE_URB_COUNT];
 } candle_device_t;
@@ -88,3 +90,4 @@ typedef struct {
     candle_err_t last_error;
     candle_device_t dev[CANDLE_MAX_DEVICES];
 } candle_list_t;
+

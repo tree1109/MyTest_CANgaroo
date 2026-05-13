@@ -24,10 +24,11 @@
 
 #include <QMutexLocker>
 
-CandleApiInterface::CandleApiInterface(CandleApiDriver *driver, candle_handle handle)
+CandleApiInterface::CandleApiInterface(CandleApiDriver *driver, candle_handle handle, uint8_t channel)
   : BusInterface(reinterpret_cast<CanDriver*>(driver)),
     _hostOffsetStart(0),
     _deviceTicksStart(0),
+    _channel(channel),
     _isOpen(false),
     _isFdEnabled(false),
     _handle(handle),
@@ -67,6 +68,22 @@ CandleApiInterface::CandleApiInterface(CandleApiDriver *driver, candle_handle ha
         << CandleApiTiming(160000000,  250000, 875,  4, 138, 20)
         << CandleApiTiming(160000000,  500000, 875,  2, 138, 20)
         << CandleApiTiming(160000000, 1000000, 875,  1, 138, 20);
+
+    _timings
+        // Timings for 80MHz (CANnectivity)
+        << CandleApiTiming(80000000,   10000, 875, 80,  86, 13)
+        << CandleApiTiming(80000000,   20000, 875, 40,  86, 13)
+        << CandleApiTiming(80000000,   50000, 875, 16,  86, 13)
+        << CandleApiTiming(80000000,  100000, 875,  8,  86, 13)
+        << CandleApiTiming(80000000,  125000, 875,  6,  86, 13)
+        << CandleApiTiming(80000000,  250000, 875,  3,  86, 13)
+        << CandleApiTiming(80000000,  500000, 875,  1, 139, 20)
+        << CandleApiTiming(80000000,  800000, 875,  1,  86, 13)
+        << CandleApiTiming(80000000, 1000000, 875,  1,  69, 10)
+        << CandleApiTiming(80000000, 2000000, 875,  1,  34,  5)
+        << CandleApiTiming(80000000, 4000000, 850,  1,  16,  3)
+        << CandleApiTiming(80000000, 5000000, 875,  1,  13,  2)
+        << CandleApiTiming(80000000, 8000000, 800,  1,   7,  2)
 
     // Timings for 48MHz processors (CANable 0.X)
     _timings
@@ -205,12 +222,25 @@ CandleApiInterface::~CandleApiInterface()
 
 QString CandleApiInterface::getName() const
 {
-    return "candle" + QString::number(getId() & 0xFF);
+    QString name = QString::fromStdWString(getPath());
+    // Try to extract a human-readable name from the device path
+    // Fall back to "candle{driver_id}_{channel}"
+    return "candle" + QString::number(getId() >> 8) + "_ch" + QString::number(_channel);
 }
 
 QString CandleApiInterface::getDetailsStr() const
 {
-    return QString::fromStdWString(getPath());
+    return QString::fromStdWString(getPath()) + " ch" + QString::number(_channel);
+}
+
+uint8_t CandleApiInterface::getChannel() const
+{
+    return _channel;
+}
+
+bool CandleApiInterface::matches(candle_handle dev, uint8_t channel) const
+{
+    return (_channel == channel) && (getPath() == std::wstring(candle_dev_get_path(dev)));
 }
 
 void CandleApiInterface::applyConfig(const MeasurementInterface &mi)
@@ -227,7 +257,7 @@ uint32_t CandleApiInterface::getCapabilities()
 {
     candle_capability_t caps;
 
-    if (candle_channel_get_capabilities(_handle, 0, &caps)) {
+    if (candle_channel_get_capabilities(_handle, _channel, &caps)) {
 
         uint32_t retval = 0;
 
@@ -259,7 +289,7 @@ QList<CanTiming> CandleApiInterface::getAvailableBitrates()
     QList<CanTiming> retval;
 
     candle_capability_t caps;
-    if (!candle_channel_get_capabilities(_handle, 0, &caps)) {
+    if (!candle_channel_get_capabilities(_handle, _channel, &caps)) {
         log_info(tr("CandleApi::getAvailableBitrates() failed!"));
         return retval;
     }
@@ -297,8 +327,7 @@ QList<CanTiming> CandleApiInterface::getAvailableBitrates()
 bool CandleApiInterface::setBitTiming(uint32_t bitrate, uint32_t samplePoint)
 {
     candle_capability_t caps;
-    if (!candle_channel_get_capabilities(_handle, 0, &caps)) {
-        log_info(tr("CandleApi::setBitTiming(): Could not get capabilities!"));
+    if (!candle_channel_get_capabilities(_handle, _channel, &caps)) {
         return false;
     }
 
@@ -311,7 +340,7 @@ bool CandleApiInterface::setBitTiming(uint32_t bitrate, uint32_t samplePoint)
           && (t.getSamplePoint()==samplePoint) )
         {
             candle_bittiming_t timing = t.getTiming();
-            bool ok = candle_channel_set_timing(_handle, 0, &timing);
+            bool ok = candle_channel_set_timing(_handle, _channel, &timing);
             if (!ok) {
                 log_info(tr("CandleApi::setBitTiming(): candle_channel_set_timing() failed!"));
             }
@@ -328,7 +357,7 @@ bool CandleApiInterface::setBitTiming(uint32_t bitrate, uint32_t samplePoint)
 bool CandleApiInterface::setDataBitTiming(uint32_t bitrate, uint32_t samplePoint)
 {
     candle_capability_t caps;
-    if (!candle_channel_get_capabilities(_handle, 0, &caps)) {
+    if (!candle_channel_get_capabilities(_handle, _channel, &caps)) {
         log_info(tr("CandleApi::setDataBitTiming(): Could not get capabilities!"));
         return false;
     }
@@ -342,7 +371,7 @@ bool CandleApiInterface::setDataBitTiming(uint32_t bitrate, uint32_t samplePoint
           && (t.getSamplePoint() == samplePoint) )
         {
             candle_bittiming_t timing = t.getTiming();
-            bool ok = candle_channel_set_data_timing(_handle, 0, &timing);
+            bool ok = candle_channel_set_data_timing(_handle, _channel, &timing);
             if (!ok) {
                 log_info(tr("CandleApi::setDataBitTiming(): candle_channel_set_data_timing() failed!"));
             }
@@ -385,7 +414,7 @@ void CandleApiInterface::open()
     // Enable CAN FD if the device supports it and the user has configured it
     if (_settings.isCanFD()) {
         candle_capability_t caps;
-        if (candle_channel_get_capabilities(_handle, 0, &caps) && (caps.feature & CANDLE_FEATURE_FD)) {
+        if (candle_channel_get_capabilities(_handle, _channel, &caps) && (caps.feature & CANDLE_FEATURE_FD)) {
             if (!setDataBitTiming(_settings.fdBitrate(), _settings.fdSamplePoint())) {
                 log_info(tr("CandleApi::open(): FD data bittiming failed, falling back to classic CAN"));
             } else {
@@ -409,7 +438,7 @@ void CandleApiInterface::open()
         _deviceTicksStart = t_dev;
     }
 
-    candle_channel_start(_handle, 0, flags);
+    candle_channel_start(_handle, _channel, flags);
     _isOpen = true;
 }
 
@@ -420,7 +449,7 @@ bool CandleApiInterface::isOpen()
 
 void CandleApiInterface::close()
 {
-    candle_channel_stop(_handle, 0);
+    candle_channel_stop(_handle, _channel);
     candle_dev_close(_handle);
     _isOpen = false;
 }
@@ -448,7 +477,7 @@ void CandleApiInterface::sendMessage(const BusMessage &msg)
             frame.data[i] = msg.getByte(i);
         }
 
-        ok = candle_fd_frame_send(_handle, 0, &frame);
+                ok = candle_fd_frame_send(_handle, _channel, &frame);
     } else {
         candle_frame_t frame{};
 
@@ -466,7 +495,7 @@ void CandleApiInterface::sendMessage(const BusMessage &msg)
             frame.data[i] = msg.getByte(i);
         }
 
-        ok = candle_frame_send(_handle, 0, &frame);
+        ok = candle_frame_send(_handle, _channel, &frame);
     }
 
     if (ok) {
@@ -504,6 +533,11 @@ bool CandleApiInterface::readMessage(QList<BusMessage> &msglist, unsigned int ti
             return hasTx;
         }
         if (candle_fd_frame_type(&frame) != CANDLE_FRAMETYPE_RECEIVE) {
+            return hasTx;
+        }
+
+        // Filter frames by channel on multi-channel devices
+        if (frame.channel != _channel) {
             return hasTx;
         }
 
@@ -545,6 +579,11 @@ bool CandleApiInterface::readMessage(QList<BusMessage> &msglist, unsigned int ti
             return hasTx;
         }
         if (candle_frame_type(&frame) != CANDLE_FRAMETYPE_RECEIVE) {
+            return hasTx;
+        }
+
+        // Filter frames by channel on multi-channel devices
+        if (frame.channel != _channel) {
             return hasTx;
         }
 
@@ -626,5 +665,10 @@ void CandleApiInterface::update(candle_handle dev)
 {
     candle_dev_free(_handle);
     _handle = dev;
+}
+
+QString CandleApiInterface::getVersion()
+{
+    return "1.0";
 }
 

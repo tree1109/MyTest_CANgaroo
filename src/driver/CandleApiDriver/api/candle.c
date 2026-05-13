@@ -3,17 +3,17 @@
   Copyright (c) 2016 Hubert Denkmair <hubert@denkmair.de>
 
   This file is part of the candle windows API.
-  
+
   This library is free software: you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
   License as published by the Free Software Foundation, either
   version 3 of the License, or (at your option) any later version.
- 
+
   This library is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
   Lesser General Public License for more details.
- 
+
   You should have received a copy of the GNU Lesser General Public
   License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
@@ -263,7 +263,7 @@ static bool candle_dev_interal_open(candle_handle hdev)
     if (!WinUsb_SetPipePolicy(dev->winUSBHandle, dev->bulkInPipe, RAW_IO, sizeof(use_raw_io), &use_raw_io)) {
         dev->last_error = CANDLE_ERR_SET_PIPE_RAW_IO;
         goto winusb_free;
-    } 
+    }
 
     if (!candle_ctrl_set_host_format(dev)) {
         goto winusb_free;
@@ -273,9 +273,19 @@ static bool candle_dev_interal_open(candle_handle hdev)
         goto winusb_free;
     }
 
-    if (!candle_ctrl_get_capability(dev, 0, &dev->bt_const)) {
+        if (!candle_ctrl_get_capability(dev, 0, &dev->bt_const)) {
         dev->last_error = CANDLE_ERR_GET_BITTIMING_CONST;
         goto winusb_free;
+    }
+
+    /* Query capabilities for each channel on multi-channel devices */
+    uint8_t num_channels = dev->dconf.icount + 1;
+    if (num_channels > 8) num_channels = 8;
+    for (uint8_t ch = 0; ch < num_channels; ch++) {
+        if (!candle_ctrl_get_capability(dev, ch, &dev->ch_caps[ch])) {
+            /* Fall back to channel 0 capabilities for this channel */
+            memcpy(&dev->ch_caps[ch], &dev->bt_const, sizeof(candle_capability_t));
+        }
     }
 
     dev->last_error = CANDLE_ERR_OK;
@@ -385,9 +395,13 @@ bool __stdcall DLL candle_channel_count(candle_handle hdev, uint8_t *num_channel
 
 bool __stdcall DLL candle_channel_get_capabilities(candle_handle hdev, uint8_t ch, candle_capability_t *cap)
 {
-    // TODO check if info was already read from device; try to do so; throw error...
     candle_device_t *dev = (candle_device_t*)hdev;
-    memcpy(cap, &dev->bt_const.feature, sizeof(candle_capability_t));
+    uint8_t num_channels = dev->dconf.icount + 1;
+    if (ch < num_channels && ch < 8) {
+        memcpy(cap, &dev->ch_caps[ch], sizeof(candle_capability_t));
+    } else {
+        memcpy(cap, &dev->bt_const, sizeof(candle_capability_t));
+    }
     return true;
 }
 

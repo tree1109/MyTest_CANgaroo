@@ -20,7 +20,7 @@ class CandleApiInterface : public BusInterface
 {
     Q_OBJECT
 public:
-    CandleApiInterface(CandleApiDriver *driver, candle_handle handle);
+    CandleApiInterface(CandleApiDriver *driver, candle_handle handle, uint8_t channel);
     ~CandleApiInterface() override;
 
     QString getName() const override;
@@ -49,14 +49,16 @@ public:
     int getNumRxOverruns() override;
     int getNumTxDropped() override;
 
+    QString getVersion();
     wstring getPath() const;
+    uint8_t getChannel() const;
 
-    void update(candle_handle dev);
-
+    bool matches(candle_handle dev, uint8_t channel) const;
 private:
 
     uint64_t _hostOffsetStart;
     uint32_t _deviceTicksStart;
+    uint8_t _channel;
     bool _isOpen;
     bool _isFdEnabled;
 
@@ -79,3 +81,4 @@ private:
 };
 
 #endif // CANDLEAPIINTERFACE_H
+
