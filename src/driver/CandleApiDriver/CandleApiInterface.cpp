@@ -202,7 +202,16 @@ CandleApiInterface::CandleApiInterface(CandleApiDriver *driver,
         << CandleApiTiming(160000000,  1000000, 800, 2, 62, 16)  //  160M/(2*80)  = 1M,  SP=80.0%
         << CandleApiTiming(160000000,  2000000, 800, 1, 62, 16)  //  160M/(1*80)  = 2M,  SP=80.0%
         << CandleApiTiming(160000000,  4000000, 800, 1, 30,  8)  //  160M/(1*40)  = 4M,  SP=80.0%
+        << CandleApiTiming(160000000,  5000000, 812, 1, 24,  6)  //  160M/(1*32)  = 5M,  SP=81.25%
         << CandleApiTiming(160000000,  8000000, 800, 1, 14,  4); //  160M/(1*20)  = 8M,  SP=80.0%
+
+    // 80 MHz (CANnectivity)
+    _fdTimings
+        << CandleApiTiming(80000000,   1000000, 800, 1, 62, 16)  //  80M/(1*80)   = 1M,  SP=80.0%
+        << CandleApiTiming(80000000,   2000000, 800, 1, 30,  8)  //  80M/(1*40)   = 2M,  SP=80.0%
+        << CandleApiTiming(80000000,   4000000, 800, 1, 14,  4)  //  80M/(1*20)   = 4M,  SP=80.0%
+        << CandleApiTiming(80000000,   5000000, 812, 1, 11,  3)  //  80M/(1*16)   = 5M,  SP=81.25%
+        << CandleApiTiming(80000000,   8000000, 800, 1,  6,  2); //  80M/(1*10)   = 8M,  SP=80.0%
 
     // 48 MHz (CANable 0.x — STM32F072)
     _fdTimings
