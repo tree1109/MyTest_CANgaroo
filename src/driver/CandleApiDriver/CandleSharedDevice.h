@@ -48,6 +48,12 @@ struct CandleSharedDevice
     QMutex openMutex;
     int openCount{0};
 
+    // Serialises candle_frame_send / candle_fd_frame_send calls. Both channels
+    // share the same USB bulk OUT endpoint; without a mutex two concurrent sends
+    // could interleave. The tryLock timeout in sendMessage() ensures that a
+    // stuck write on one channel does not block the other channel indefinitely.
+    QMutex writeMutex;
+
     // Per-channel receive queues fed by the background reader thread.
     QMutex queueMutex;
     QWaitCondition queueCond;

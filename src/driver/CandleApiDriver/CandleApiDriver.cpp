@@ -25,6 +25,23 @@
 #include "CandleApiInterface.h"
 #include "driver/GenericCanSetupPage.h"
 
+// Composite USB devices expose each CAN interface as a separate Windows device
+// path containing "&MI_XX" (e.g. "&MI_00", "&MI_02"). Strip that segment so
+// we can recognise multiple interface paths as the same physical device.
+static std::wstring baseDevicePath(const std::wstring &path)
+{
+    std::wstring result = path;
+    const std::wstring mi_tag = L"&MI_";
+    const auto pos = result.find(mi_tag);
+    if (pos != std::wstring::npos) {
+        const auto next = result.find(L'#', pos);
+        if (next != std::wstring::npos) {
+            result.erase(pos, next - pos);
+        }
+    }
+    return result;
+}
+
 
 CandleApiDriver::CandleApiDriver(Backend &backend)
   : CanDriver(backend),
@@ -77,6 +94,17 @@ bool CandleApiDriver::update()
         }
 
         const std::wstring devPath(candle_dev_get_path(dev));
+        const std::wstring baseKey = baseDevicePath(devPath);
+
+        // Skip additional USB interfaces of a device we already processed.
+        // On composite devices each CAN channel has its own interface path
+        // (MI_00, MI_02, …) but they all share the same USB endpoint and
+        // the firmware reports the total icount from any interface.
+        if (_devices.count(baseKey)) {
+            candle_dev_close(dev);
+            candle_dev_free(dev);
+            continue;
+        }
 
         // Create a single shared handle for all channels on this device.
         // candle_dev_get() allocates a fresh candle_device_t; we pre-populate
@@ -98,7 +126,7 @@ bool CandleApiDriver::update()
 
         auto sharedDev = std::make_shared<CandleSharedDevice>();
         sharedDev->handle = shared_handle;
-        _devices[devPath] = sharedDev;
+        _devices[baseKey] = sharedDev;
 
         // One BusInterface per channel, all sharing the same physical device.
         for (uint8_t ch = 0; ch < num_channels; ch++) {

@@ -481,6 +481,15 @@ void CandleApiInterface::close()
 
 void CandleApiInterface::sendMessage(const BusMessage &msg)
 {
+    // Guard against a stuck write on the other channel (e.g. device NAKing the
+    // OUT endpoint due to a CAN bus error) blocking this channel indefinitely.
+    // The PIPE_TRANSFER_TIMEOUT on the OUT pipe caps any single write at 500 ms;
+    // tryLock gives up after 200 ms so we fail fast rather than serialise.
+    if (!_sharedDev->writeMutex.tryLock(200)) {
+        _numTxErr++;
+        return;
+    }
+
     bool ok = false;
 
     if (_isFdEnabled && msg.isFD()) {
@@ -522,6 +531,8 @@ void CandleApiInterface::sendMessage(const BusMessage &msg)
 
         ok = candle_frame_send(_sharedDev->handle, _channel, &frame);
     }
+
+    _sharedDev->writeMutex.unlock();
 
     if (ok) {
         _numTx++;

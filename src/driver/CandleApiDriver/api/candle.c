@@ -279,6 +279,15 @@ static bool candle_dev_interal_open(candle_handle hdev)
         goto winusb_free;
     }
 
+    /* Limit how long a synchronous WritePipe can block. Without this, a device
+     * whose CAN TX queue is full (e.g. bus-off on one channel) will NAK the USB
+     * OUT endpoint indefinitely, freezing any thread that calls candle_frame_send.
+     * 300 ms is long enough for transient bursts but short enough to keep the
+     * other channel responsive. */
+    ULONG write_timeout_ms = 300;
+    WinUsb_SetPipePolicy(dev->winUSBHandle, dev->bulkOutPipe,
+                         PIPE_TRANSFER_TIMEOUT, sizeof(write_timeout_ms), &write_timeout_ms);
+
     if (!candle_ctrl_set_host_format(dev)) {
         goto winusb_free;
     }
