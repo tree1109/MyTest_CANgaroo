@@ -60,10 +60,6 @@ public:
 
 private:
 
-    uint64_t _hostOffsetStart;
-    uint32_t _deviceTicksStart;
-    uint32_t _prevDeviceTs;
-    std::atomic<uint64_t> _deviceTsHigh;
     uint8_t _channel;
     std::atomic<bool> _isOpen;
     bool _isFdEnabled;

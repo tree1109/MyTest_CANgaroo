@@ -26,6 +26,8 @@
 
 #define SYSTEM_SEND_CAN_FRAME   30u // Transmit a CAN frame immediately
 #define SYSTEM_SET_LIN_DATA     31u
+#define SYSTEM_SEND_GPIO_CFG    32u // Configure GPIO pin directions and report cycle time
+#define SYSTEM_SET_GPIO_OUTPUT  33u // Set GPIO pin output states
 
 // ---------------------------------------------------------------------------
 // CAN frame flag bits — stored in Protocol_CanFrame_t::Flags
@@ -169,13 +171,28 @@ typedef struct __attribute__((packed))
     uint8_t Data[8];
 } Protocol_LinData_t;
 
+// Payload for SYSTEM_SEND_GPIO_CFG (32) — configure pin directions and auto-report interval.
+typedef struct __attribute__((packed))
+{
+    Protocol_SystemHeader_t Header;
+    uint8_t  CycleTime_ms;  // Auto-report interval in ms (0 = disabled, minimum 5)
+    uint16_t PinDirection;  // Bitmask: bit N = 1 → output, 0 → input
+} Protocol_GPIO_Config_t;
+
+// Payload for SYSTEM_SET_GPIO_OUTPUT (33) — set digital output levels.
+typedef struct __attribute__((packed))
+{
+    Protocol_SystemHeader_t Header;
+    uint16_t PinOutputState; // Bitmask: bit N = 1 → high, 0 → low
+} Protocol_GPIO_Output_t;
+
 // Payload for incoming DATA_REPORT_GPIO (252).
 typedef struct __attribute__((packed))
 {
     Protocol_SystemHeader_t Header;
-    uint16_t PinState;       // Bitmask: bit N = digital state of pin N
-    uint16_t AnalogValue[8]; // Measured voltage per pin in mV
-} Protocol_GPIO_t;
+    uint16_t PinState;      // Bitmask: bit N = digital state of pin N
+    uint16_t Voltage_mV[8]; // Measured voltage per pin in mV
+} Protocol_GpioStatus_t;
 
 #define DATA_REPORT_GPIO        252u
 
@@ -524,6 +541,41 @@ void GrIPHandler::LinSetConfig(uint8_t ch, uint32_t baud, bool master, uint8_t p
 
     std::unique_lock<std::mutex> lck(m_MutexSerial);
 
+    std::ignore = GrIP_Transmit(PROT_GrIP, MSG_SYSTEM_CMD, RET_OK, &p);
+}
+
+void GrIPHandler::GpioSetConfig(uint8_t cycleTime_ms, uint16_t pinDirection)
+{
+    Protocol_GPIO_Config_t cfg = {};
+
+    cfg.Header.Version = GRIP_HEADER_VERSION;
+    cfg.Header.Command = SYSTEM_SEND_GPIO_CFG;
+    cfg.Header.Length  = sizeof(Protocol_GPIO_Config_t) - sizeof(Protocol_SystemHeader_t);
+    cfg.Header.Data    = 0;
+
+    cfg.CycleTime_ms = cycleTime_ms;
+    cfg.PinDirection = pinDirection;
+
+    GrIP_Pdu_t p = {reinterpret_cast<uint8_t *>(&cfg), sizeof(Protocol_GPIO_Config_t)};
+
+    std::unique_lock<std::mutex> lck(m_MutexSerial);
+    std::ignore = GrIP_Transmit(PROT_GrIP, MSG_SYSTEM_CMD, RET_OK, &p);
+}
+
+void GrIPHandler::GpioSetOutput(uint16_t pinOutputState)
+{
+    Protocol_GPIO_Output_t out = {};
+
+    out.Header.Version = GRIP_HEADER_VERSION;
+    out.Header.Command = SYSTEM_SET_GPIO_OUTPUT;
+    out.Header.Length  = sizeof(Protocol_GPIO_Output_t) - sizeof(Protocol_SystemHeader_t);
+    out.Header.Data    = 0;
+
+    out.PinOutputState = pinOutputState;
+
+    GrIP_Pdu_t p = {reinterpret_cast<uint8_t *>(&out), sizeof(Protocol_GPIO_Output_t)};
+
+    std::unique_lock<std::mutex> lck(m_MutexSerial);
     std::ignore = GrIP_Transmit(PROT_GrIP, MSG_SYSTEM_CMD, RET_OK, &p);
 }
 
@@ -970,11 +1022,11 @@ void GrIPHandler::ProcessData(GrIP_Packet_t &packet, qint64 rxTimestamp_ms)
 
         case DATA_REPORT_GPIO:
         {
-            Protocol_GPIO_t frame;
-            std::memcpy(&frame, packet.Data, sizeof(Protocol_GPIO_t));
+            Protocol_GpioStatus_t frame;
+            std::memcpy(&frame, packet.Data, sizeof(Protocol_GpioStatus_t));
 
             m_GPIO_PinState = frame.PinState;
-            std::memcpy(m_GPIO_AnalogValues, frame.AnalogValue, sizeof(m_GPIO_AnalogValues));
+            std::memcpy(m_GPIO_AnalogValues, frame.Voltage_mV, sizeof(m_GPIO_AnalogValues));
 
             lck.unlock();
             emit gpioUpdated(m_GPIO_PinState, QVector<uint16_t>(m_GPIO_AnalogValues, m_GPIO_AnalogValues + 8));

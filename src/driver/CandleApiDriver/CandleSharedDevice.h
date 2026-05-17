@@ -26,7 +26,15 @@
 #include <QWaitCondition>
 
 #include <atomic>
+#include <cstdint>
 #include <thread>
+
+struct CandleQueuedFrame
+{
+    candle_fd_frame_t frame{};
+    uint64_t timestampUs{0};
+    bool timestampValid{false};
+};
 
 // Shared state for all CAN channels on a single physical gs_usb device.
 //
@@ -57,12 +65,19 @@ struct CandleSharedDevice
     // Per-channel receive queues fed by the background reader thread.
     QMutex queueMutex;
     QWaitCondition queueCond;
-    QList<candle_fd_frame_t> rxQueues[MAX_CHANNELS];
+    QList<CandleQueuedFrame> rxQueues[MAX_CHANNELS];
 
     // Shared timestamp epoch captured once at device open time so that all
     // channels on the same physical device use an identical baseline.
     uint64_t hostOffsetStart{0};
     uint32_t deviceTicksStart{0};
+    bool deviceTimestampValid{false};
+
+    // 32-bit firmware timestamps wrap after about 71 minutes. Unwrap them in
+    // the single USB reader/TX order so all channels share one monotonic clock.
+    QMutex timestampMutex;
+    uint32_t prevDeviceTs{0};
+    uint64_t deviceTsHigh{0};
 
     // Background reader thread: calls candle_fd_frame_read() in a loop and
     // routes each received frame to the appropriate channel queue.
@@ -73,7 +88,9 @@ struct CandleSharedDevice
 
     void startReader();
     void stopReader();
+    void resetTimestampEpoch(uint64_t hostOffsetUs, uint32_t deviceTicks, bool valid);
+    bool deviceTimestampToHostUs(uint32_t rawTimestampUs, uint64_t &hostTimestampUs);
 
     // Block until a frame for channel arrives or timeout_ms elapses.
-    bool readFrame(uint8_t channel, candle_fd_frame_t &frame, unsigned timeout_ms);
+    bool readFrame(uint8_t channel, CandleQueuedFrame &queuedFrame, unsigned timeout_ms);
 };

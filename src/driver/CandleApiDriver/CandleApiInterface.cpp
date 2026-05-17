@@ -20,16 +20,13 @@
 #include "CandleApiInterface.h"
 #include "CandleApiDriver.h"
 
+#include <QDateTime>
 #include <QMutexLocker>
 
 CandleApiInterface::CandleApiInterface(CandleApiDriver *driver,
                                        std::shared_ptr<CandleSharedDevice> sharedDev,
                                        uint8_t channel)
   : BusInterface(reinterpret_cast<CanDriver*>(driver)),
-    _hostOffsetStart(0),
-    _deviceTicksStart(0),
-    _prevDeviceTs(0),
-    _deviceTsHigh(0),
     _channel(channel),
     _isOpen(false),
     _isFdEnabled(false),
@@ -445,23 +442,16 @@ void CandleApiInterface::open()
 
     if (firstOpen) {
         uint32_t t_dev = 0;
+        const uint64_t hostNowUs =
+                _backend.getUsecsAtMeasurementStart() +
+                _backend.getUsecsSinceMeasurementStart();
         if (candle_dev_get_timestamp_us(_sharedDev->handle, &t_dev)) {
-            _sharedDev->hostOffsetStart =
-                    _backend.getUsecsAtMeasurementStart() +
-                    _backend.getUsecsSinceMeasurementStart();
-            _sharedDev->deviceTicksStart = t_dev;
+            _sharedDev->resetTimestampEpoch(hostNowUs, t_dev, true);
+        } else {
+            _sharedDev->resetTimestampEpoch(hostNowUs, 0, false);
+            log_info(tr("CandleApi::open(): device timestamp unavailable, using host timestamps"));
         }
     }
-
-    // All channels on the same device share the identical epoch baseline so
-    // that inter-channel timestamps are directly comparable.
-    _hostOffsetStart = _sharedDev->hostOffsetStart;
-    _deviceTicksStart = _sharedDev->deviceTicksStart;
-    // Initialise to 0 (sentinel "no frame seen yet") so the first received
-    // frame — which may be a pre-epoch USB-buffered frame slightly before
-    // _deviceTicksStart — does not trigger a false wrap into _deviceTsHigh.
-    _prevDeviceTs = 0;
-    _deviceTsHigh.store(0, std::memory_order_relaxed);
 
     if (firstOpen) {
         _sharedDev->startReader();
@@ -552,14 +542,10 @@ void CandleApiInterface::sendMessage(const BusMessage &msg)
         BusMessage txMsg = msg;
         txMsg.setRX(false);
         uint32_t t_dev = 0;
-        const bool ts_ok = candle_dev_get_timestamp_us(_sharedDev->handle, &t_dev);
-        const uint64_t high = _deviceTsHigh.load(std::memory_order_acquire);
-        uint64_t ts_us;
-        if (ts_ok && t_dev >= _deviceTicksStart) {
-            ts_us = _hostOffsetStart + high + (t_dev - _deviceTicksStart);
-        } else {
-            // Device timestamp unavailable or before epoch — use current high-water mark.
-            ts_us = _hostOffsetStart + high;
+        uint64_t ts_us = 0;
+        if (!candle_dev_get_timestamp_us(_sharedDev->handle, &t_dev)
+                || !_sharedDev->deviceTimestampToHostUs(t_dev, ts_us)) {
+            ts_us = static_cast<uint64_t>(QDateTime::currentMSecsSinceEpoch()) * 1000ULL;
         }
         txMsg.setTimestamp_us(static_cast<int64_t>(ts_us));
         QMutexLocker lock(&_txMutex);
@@ -581,10 +567,11 @@ bool CandleApiInterface::readMessage(QList<BusMessage> &msglist, unsigned int ti
     const unsigned readTimeout = hasTx ? 1 : timeout_ms;
 
     // The reader thread fills per-channel queues; we just wait for our channel.
-    candle_fd_frame_t frame;
-    if (!_sharedDev->readFrame(_channel, frame, readTimeout)) {
+    CandleQueuedFrame queuedFrame;
+    if (!_sharedDev->readFrame(_channel, queuedFrame, readTimeout)) {
         return hasTx;
     }
+    candle_fd_frame_t frame = queuedFrame.frame;
 
     _numRx++;
 
@@ -607,21 +594,9 @@ bool CandleApiInterface::readMessage(QList<BusMessage> &msglist, unsigned int ti
         msg.setByte(i, data[i]);
     }
 
-    uint32_t raw_ts = candle_fd_frame_timestamp_us(&frame);
-    // Skip the wrap check on the very first frame (_prevDeviceTs == 0).
-    // Pre-epoch USB-buffered frames (raw_ts < _deviceTicksStart) must not
-    // trigger a false wrap that would add ~71 minutes to every timestamp.
-    if (_prevDeviceTs != 0 && raw_ts < _prevDeviceTs) {
-        _deviceTsHigh.fetch_add(1ULL << 32, std::memory_order_relaxed);
-    }
-    _prevDeviceTs = raw_ts;
-    const uint64_t high = _deviceTsHigh.load(std::memory_order_relaxed);
-    const uint64_t abs_ts = static_cast<uint64_t>(raw_ts) + high;
-    if (abs_ts < _deviceTicksStart) {
-        return hasTx;
-    }
-    const uint64_t ts_us = _hostOffsetStart + (abs_ts - _deviceTicksStart);
-
+    const uint64_t ts_us = queuedFrame.timestampValid
+            ? queuedFrame.timestampUs
+            : static_cast<uint64_t>(QDateTime::currentMSecsSinceEpoch()) * 1000ULL;
     msg.setTimestamp_us(static_cast<int64_t>(ts_us));
     msglist.append(msg);
     return true;

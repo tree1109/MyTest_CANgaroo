@@ -49,8 +49,13 @@ void CandleSharedDevice::startReader()
             }
             const uint8_t ch = frame.channel;
             if (ch < MAX_CHANNELS) {
+                CandleQueuedFrame queuedFrame;
+                queuedFrame.frame = frame;
+                queuedFrame.timestampValid = deviceTimestampToHostUs(candle_fd_frame_timestamp_us(&frame),
+                                                                     queuedFrame.timestampUs);
+
                 QMutexLocker lock(&queueMutex);
-                rxQueues[ch].append(frame);
+                rxQueues[ch].append(queuedFrame);
                 queueCond.wakeAll();
             }
         }
@@ -69,7 +74,55 @@ void CandleSharedDevice::stopReader()
     }
 }
 
-bool CandleSharedDevice::readFrame(uint8_t channel, candle_fd_frame_t &frame, unsigned timeout_ms)
+void CandleSharedDevice::resetTimestampEpoch(uint64_t hostOffsetUs, uint32_t deviceTicks, bool valid)
+{
+    QMutexLocker lock(&timestampMutex);
+    hostOffsetStart = hostOffsetUs;
+    deviceTicksStart = deviceTicks;
+    deviceTimestampValid = valid;
+    prevDeviceTs = 0;
+    deviceTsHigh = 0;
+}
+
+bool CandleSharedDevice::deviceTimestampToHostUs(uint32_t rawTimestampUs, uint64_t &hostTimestampUs)
+{
+    constexpr uint32_t wrapThreshold = 0x80000000u;
+
+    QMutexLocker lock(&timestampMutex);
+
+    if (!deviceTimestampValid) {
+        return false;
+    }
+
+    if (prevDeviceTs != 0
+            && rawTimestampUs < prevDeviceTs
+            && (prevDeviceTs - rawTimestampUs) > wrapThreshold) {
+        deviceTsHigh += (1ULL << 32);
+    }
+
+    uint64_t absTimestampUs = static_cast<uint64_t>(rawTimestampUs) + deviceTsHigh;
+
+    // If the first timestamp observed after opening is below the epoch sample,
+    // distinguish a real wrap from a small pre-epoch buffered frame.
+    if (prevDeviceTs == 0 && absTimestampUs < deviceTicksStart) {
+        if ((deviceTicksStart - absTimestampUs) > wrapThreshold) {
+            deviceTsHigh += (1ULL << 32);
+            absTimestampUs += (1ULL << 32);
+        } else {
+            return false;
+        }
+    }
+
+    if (absTimestampUs < deviceTicksStart) {
+        return false;
+    }
+
+    prevDeviceTs = rawTimestampUs;
+    hostTimestampUs = hostOffsetStart + (absTimestampUs - deviceTicksStart);
+    return true;
+}
+
+bool CandleSharedDevice::readFrame(uint8_t channel, CandleQueuedFrame &queuedFrame, unsigned timeout_ms)
 {
     QMutexLocker lock(&queueMutex);
     const QDeadlineTimer deadline(timeout_ms);
@@ -78,6 +131,6 @@ bool CandleSharedDevice::readFrame(uint8_t channel, candle_fd_frame_t &frame, un
             return false;
         }
     }
-    frame = rxQueues[channel].takeFirst();
+    queuedFrame = rxQueues[channel].takeFirst();
     return true;
 }

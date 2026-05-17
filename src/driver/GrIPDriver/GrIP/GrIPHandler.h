@@ -205,10 +205,23 @@ public:
      * @param msg  Frame to transmit.
      * @return true if the frame was handed to the GrIP layer successfully.
      */
+    /**
+     * @brief Sends a SYSTEM_SEND_GPIO_CFG command to configure pin directions and auto-report interval.
+     * @param cycleTime_ms  Auto-report interval in ms (0 = disabled, clamped to >= 5 by firmware).
+     * @param pinDirection  Bitmask: bit N = 1 → output, 0 → input.
+     */
+    void GpioSetConfig(uint8_t cycleTime_ms, uint16_t pinDirection);
+
+    /**
+     * @brief Sends a SYSTEM_SET_GPIO_OUTPUT command to set digital output levels.
+     * @param pinOutputState  Bitmask: bit N = 1 → high, 0 → low.
+     */
+    void GpioSetOutput(uint16_t pinOutputState);
+
     /** @return Last received GPIO pin state bitmask (bit N = state of pin N). */
     uint16_t GpioGetPinState() const;
 
-    /** @return Last received 12-bit ADC value for @p pin (0–4095). */
+    /** @return Last received voltage in mV for @p pin. */
     uint16_t GpioGetAnalogValue(uint8_t pin) const;
 
     bool CanTransmit(uint8_t ch, const BusMessage &msg);
