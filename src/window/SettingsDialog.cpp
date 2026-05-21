@@ -75,6 +75,11 @@ SettingsDialog::SettingsDialog(QSettings &settings, QActionGroup *languageGroup,
     m_clearTraceOnStartCheck->setChecked(settings.value("ui/clearTraceOnStart", true).toBool());
     form->addRow(m_clearTraceOnStartCheck);
 
+    // --- UDS 29-bit decoding ---
+    m_uds29BitCheck = new QCheckBox(tr("Decode UDS on 29-bit (extended) CAN IDs"), this);
+    m_uds29BitCheck->setChecked(settings.value("decoder/uds29Bit", true).toBool());
+    form->addRow(m_uds29BitCheck);
+
     mainLayout->addLayout(form);
     mainLayout->addSpacing(10);
 
@@ -108,4 +113,9 @@ bool SettingsDialog::clearTraceOnStart() const
 int SettingsDialog::selectedFontSize() const
 {
     return m_fontSizeSpin->value();
+}
+
+bool SettingsDialog::uds29BitEnabled() const
+{
+    return m_uds29BitCheck->isChecked();
 }

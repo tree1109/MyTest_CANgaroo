@@ -4,11 +4,19 @@
 #include <QColor>
 #include <QSet>
 #include <QDateTime>
+#include <QSettings>
 #include "core/ThemeManager.h"
+
+void UnifiedTraceViewModel::applyProtocolConfig()
+{
+    QSettings s;
+    m_protocolManager.config().enableUds29Bit = s.value("decoder/uds29Bit", true).toBool();
+}
 
 UnifiedTraceViewModel::UnifiedTraceViewModel(Backend &backend, Category category)
     : BaseTraceViewModel(backend), m_category(category)
 {
+    applyProtocolConfig();
     m_rootItem = std::make_shared<UnifiedTraceItem>(BusMessage()); // Dummy root
     m_firstTimestamp = 0;
     m_previousRowTimestamp = 0;
@@ -309,6 +317,7 @@ void UnifiedTraceViewModel::onSetupChanged()
     beginResetModel();
     m_rootItem = std::make_shared<UnifiedTraceItem>(BusMessage());
     m_protocolManager.reset();
+    applyProtocolConfig();
     m_lastProcessedIndex = -1;
     m_globalIndexCounter = 1;
     m_firstTimestamp = 0;

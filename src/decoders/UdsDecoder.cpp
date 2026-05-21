@@ -2,6 +2,13 @@
 
 UdsDecoder::UdsDecoder() {}
 
+static constexpr uint32_t k_extendedSessionFlag = 0x80000000u;
+
+static uint32_t sessionKey(uint32_t id, bool extended) noexcept
+{
+    return extended ? (id | k_extendedSessionFlag) : id;
+}
+
 DecodeStatus UdsDecoder::tryDecode(const BusMessage& frame, ProtocolMessage& outMsg) {
     if (frame.isErrorFrame() || frame.isRTR() || frame.getLength() < 1) {
         return DecodeStatus::Ignored;
@@ -9,6 +16,7 @@ DecodeStatus UdsDecoder::tryDecode(const BusMessage& frame, ProtocolMessage& out
 
     uint8_t type = (frame.getByte(0) >> 4) & 0x0F;
     uint32_t id = frame.getId();
+    uint32_t key = sessionKey(id, frame.isExtended());
 
     if (frame.isExtended()) {
         uint8_t pf = (id >> 16) & 0xFF;
@@ -21,12 +29,9 @@ DecodeStatus UdsDecoder::tryDecode(const BusMessage& frame, ProtocolMessage& out
         int size = frame.getByte(0) & 0x0F;
         if (size > 0 && size <= frame.getLength() - 1) {
             uint8_t sid = frame.getByte(1);
-            
-            // Strict check: Only consider UDS if the SID is a recognized service
-            // to avoid capturing generic 11-bit traffic (like cangen -L 8).
+
             QString serviceName = interpretService(sid);
             if (serviceName.startsWith("sid 0x")) {
-                // Not a recognized service, probably not UDS
                 return DecodeStatus::Ignored;
             }
 
@@ -37,13 +42,10 @@ DecodeStatus UdsDecoder::tryDecode(const BusMessage& frame, ProtocolMessage& out
             outMsg.rawFrames = {frame};
             outMsg.protocol = "uds";
             outMsg.timestamp = static_cast<uint64_t>(frame.getFloatTimestamp() * 1000000.0);
-            
+
             outMsg.id = sid;
             outMsg.name = serviceName;
-            
-            // Type detection: Request vs Response
-            // In Cangaroo, we can often tell by ID (e.g., 0x7E0 is req, 0x7E8 is resp)
-            // But generically: sid & 0x40 is response, unless it's 0x7F.
+
             if (sid == 0x7F) {
                 outMsg.type = MessageType::NegativeResponse;
                 if (outMsg.payload.size() >= 3) {
@@ -59,13 +61,19 @@ DecodeStatus UdsDecoder::tryDecode(const BusMessage& frame, ProtocolMessage& out
                 outMsg.type = MessageType::Request;
                 outMsg.description = QString("uds request, sid 0x%1").arg(sid, 2, 16, QChar('0'));
             }
-            
-            m_sessions.remove(id); // Clear any pending multi-frame on this ID
+
+            m_sessions.remove(key);
             return DecodeStatus::Completed;
         }
     } else if (type == 1) { // First Frame
+        if (frame.getLength() > 2) {
+            uint8_t sid = frame.getByte(2);
+            if (interpretService(sid).startsWith("sid 0x")) {
+                return DecodeStatus::Ignored;
+            }
+        }
         int size = ((frame.getByte(0) & 0x0F) << 8) | frame.getByte(1);
-        IsotpSession& session = m_sessions[id];
+        IsotpSession& session = m_sessions[key];
         session.data = QByteArray();
         for (int i = 2; i < frame.getLength(); ++i) {
             session.data.append(frame.getByte(i));
@@ -76,8 +84,8 @@ DecodeStatus UdsDecoder::tryDecode(const BusMessage& frame, ProtocolMessage& out
         session.rxId = id;
         return DecodeStatus::Consumed;
     } else if (type == 2) { // Consecutive Frame
-        if (m_sessions.contains(id)) {
-            IsotpSession& session = m_sessions[id];
+        if (m_sessions.contains(key)) {
+            IsotpSession& session = m_sessions[key];
             uint8_t sn = frame.getByte(0) & 0x0F;
             if (sn == session.nextSn) {
                 session.frames.append(frame);
@@ -93,7 +101,7 @@ DecodeStatus UdsDecoder::tryDecode(const BusMessage& frame, ProtocolMessage& out
                     outMsg.timestamp = static_cast<uint64_t>(session.frames.first().getFloatTimestamp() * 1000000.0);
 
                     if (outMsg.payload.isEmpty()) {
-                        m_sessions.remove(id);
+                        m_sessions.remove(key);
                         return DecodeStatus::Ignored;
                     }
                     uint8_t sid = outMsg.payload.at(0);
@@ -114,19 +122,17 @@ DecodeStatus UdsDecoder::tryDecode(const BusMessage& frame, ProtocolMessage& out
                         outMsg.type = MessageType::Request;
                         outMsg.description = QString("uds request, sid 0x%1").arg(sid, 2, 16, QChar('0'));
                     }
-                    
-                    m_sessions.remove(id);
+
+                    m_sessions.remove(key);
                     return DecodeStatus::Completed;
                 }
                 return DecodeStatus::Consumed;
             } else {
-                // Out of sequence or interleaved? For now just reset.
-                m_sessions.remove(id);
+                m_sessions.remove(key);
                 return DecodeStatus::Ignored;
             }
         }
     } else if (type == 3) {
-        // Flow Control - ignore for passive decoding, but technically it is "Consumed" for the session
         return DecodeStatus::Consumed;
     }
 

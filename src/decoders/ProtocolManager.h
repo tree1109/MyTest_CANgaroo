@@ -5,7 +5,7 @@
 #include <memory>
 
 struct ProtocolConfig {
-    bool enableUds29Bit = false;
+    bool enableUds29Bit = true;
 };
 
 class ProtocolManager {

@@ -94,6 +94,8 @@ public:
     pCanDb loadDbc(QString filename, QString *errorMsg = nullptr);
     pLinDb loadLdf(QString filename, QString *errorMsg = nullptr);
 
+    void notifyDecoderConfigChanged();
+
     void clearLog();
     LogModel &getLogModel() const;
 

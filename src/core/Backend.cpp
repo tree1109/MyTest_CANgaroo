@@ -82,6 +82,11 @@ void Backend::refreshInterfaces()
     emit onSetupChanged();
 }
 
+void Backend::notifyDecoderConfigChanged()
+{
+    emit onSetupChanged();
+}
+
 bool Backend::startMeasurement()
 {
     log_info(tr("Starting measurement"));

@@ -1135,6 +1135,10 @@ void MainWindow::showSettingsDialog()
 
     // Apply clear trace on start setting.
     settings.setValue("ui/clearTraceOnStart", dlg.clearTraceOnStart());
+
+    // Apply UDS 29-bit decoding setting.
+    settings.setValue("decoder/uds29Bit", dlg.uds29BitEnabled());
+    backend().notifyDecoderConfigChanged();
 }
 
 void MainWindow::applyFontSize(int pointSize)

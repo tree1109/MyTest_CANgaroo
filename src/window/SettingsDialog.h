@@ -20,11 +20,13 @@ public:
     bool restoreWindowEnabled() const;
     bool clearTraceOnStart() const;
     int selectedFontSize() const;
+    bool uds29BitEnabled() const;
 
 private:
     QComboBox *m_themeCombo;
     QComboBox *m_languageCombo;
     QCheckBox *m_restoreWindowCheck;
     QCheckBox *m_clearTraceOnStartCheck;
+    QCheckBox *m_uds29BitCheck;
     QSpinBox *m_fontSizeSpin;
 };

@@ -67,6 +67,8 @@ private:
     static uint64_t makeDeltaKey(const BusMessage &msg);
     static uint64_t makeDeltaKey(const ProtocolMessage &pmsg);
 
+    void applyProtocolConfig();
+
     QVariant data_DisplayRole(const QModelIndex &index, int role) const override;
     QVariant data_TextColorRole(const QModelIndex &index, int role) const override;
     QString formatUnifiedTimestamp(uint64_t ts, uint64_t prevTs) const;
