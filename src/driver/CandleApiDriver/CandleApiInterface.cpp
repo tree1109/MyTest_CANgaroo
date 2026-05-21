@@ -675,11 +675,6 @@ bool CandleApiInterface::readMessage(QList<BusMessage> &msglist, unsigned int ti
             ? queuedFrame.timestampUs
             : static_cast<uint64_t>(QDateTime::currentMSecsSinceEpoch()) * 1000ULL;
     msg.setTimestamp_us(static_cast<int64_t>(ts_us));
-    log_debug(QStringLiteral("%1 RX id=0x%2 dlc=%3 fd=%4")
-        .arg(getName())
-        .arg(candle_fd_frame_id(&frame), 0, 16)
-        .arg(len)
-        .arg(isFd ? 1 : 0));
     msglist.append(msg);
     return true;
 }

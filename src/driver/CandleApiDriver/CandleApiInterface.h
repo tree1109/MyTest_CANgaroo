@@ -62,8 +62,8 @@ private:
 
     uint8_t _channel;
     std::atomic<bool> _isOpen;
-    bool _isFdEnabled;
-    bool _getStateFailed{false};
+    std::atomic<bool> _isFdEnabled;
+    std::atomic<bool> _getStateFailed{false};
 
     std::shared_ptr<CandleSharedDevice> _sharedDev;
     MeasurementInterface _settings;

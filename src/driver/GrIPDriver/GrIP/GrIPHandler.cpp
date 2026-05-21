@@ -728,17 +728,19 @@ bool GrIPHandler::CanTransmit(uint8_t ch, const BusMessage &msg)
 {
     Protocol_CanFrame_t frame = {};
 
+    const uint8_t dataLen = static_cast<uint8_t>(std::min(static_cast<int>(msg.getLength()), 64));
+
     frame.Header.Version = GRIP_HEADER_VERSION;
     frame.Header.Command = SYSTEM_SEND_CAN_FRAME;
-    frame.Header.Length = sizeof(Protocol_CanFrame_t) - sizeof(Protocol_SystemHeader_t) - 64 + msg.getLength();
+    frame.Header.Length = static_cast<uint16_t>(sizeof(Protocol_CanFrame_t) - sizeof(Protocol_SystemHeader_t) - 64u + dataLen);
     frame.Header.Data = 0;
 
-    const uint16_t pduLen = static_cast<uint16_t>(sizeof(Protocol_CanFrame_t) - 64u + msg.getLength());
+    const uint16_t pduLen = static_cast<uint16_t>(sizeof(Protocol_CanFrame_t) - 64u + dataLen);
     GrIP_Pdu_t p = {reinterpret_cast<uint8_t *>(&frame), pduLen};
 
     frame.Channel = ch;
     frame.ID = msg.getId();
-    frame.DLC = msg.getLength();
+    frame.DLC = dataLen;
     frame.ErrFlags = 0;
 
     // Build flags from the BusMessage properties
@@ -756,7 +758,7 @@ bool GrIPHandler::CanTransmit(uint8_t ch, const BusMessage &msg)
         frame.Flags |= CAN_FLAGS_RTR;
     }
 
-    for (int i = 0; i < msg.getLength(); i++)
+    for (int i = 0; i < dataLen; i++)
     {
         frame.Data[i] = msg.getByte(i);
     }
@@ -988,10 +990,11 @@ void GrIPHandler::ProcessData(GrIP_Packet_t &packet, qint64 rxTimestamp_ms)
             break;
         }
 
-        case 219u:  // LIJN Status Frame
+        case 219u:  // LIN Status Frame
         {
             Protocol_BusStatus_t frame;
-            std::memcpy(&frame, packet.Data, sizeof(Protocol_BusStatus_t));
+            std::memcpy(&frame, packet.Data, std::min(sizeof(Protocol_BusStatus_t),
+                static_cast<size_t>(packet.RX_Header.Length) + sizeof(Protocol_SystemHeader_t)));
 
             for (size_t i = 0; i < m_LinBusStatus.size(); i++)
             {
@@ -1040,14 +1043,19 @@ void GrIPHandler::ProcessData(GrIP_Packet_t &packet, qint64 rxTimestamp_ms)
 
         case DATA_REPORT_GPIO:
         {
-            Protocol_GpioStatus_t frame;
-            std::memcpy(&frame, packet.Data, sizeof(Protocol_GpioStatus_t));
+            Protocol_GpioStatus_t frame = {};
+            std::memcpy(&frame, packet.Data, std::min(sizeof(Protocol_GpioStatus_t),
+                static_cast<size_t>(packet.RX_Header.Length) + sizeof(Protocol_SystemHeader_t)));
 
             m_GPIO_PinState = frame.PinState;
             std::memcpy(m_GPIO_AnalogValues, frame.Voltage_mV, sizeof(m_GPIO_AnalogValues));
 
+            // Snapshot protected members before releasing the lock so the emit
+            // cannot race with GpioGetPinState() / GpioGetAnalogValue().
+            const uint16_t pinSnapshot = m_GPIO_PinState;
+            const QVector<uint16_t> analogSnapshot(m_GPIO_AnalogValues, m_GPIO_AnalogValues + 8);
             lck.unlock();
-            emit gpioUpdated(m_GPIO_PinState, QVector<uint16_t>(m_GPIO_AnalogValues, m_GPIO_AnalogValues + 8));
+            emit gpioUpdated(pinSnapshot, analogSnapshot);
             break;
         }
 

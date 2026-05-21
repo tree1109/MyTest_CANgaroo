@@ -92,11 +92,12 @@ DecodeStatus UdsDecoder::tryDecode(const BusMessage& frame, ProtocolMessage& out
             dataOffset = 6;
         }
 
-        if (dataOffset < frame.getLength()) {
-            uint8_t sid = frame.getByte(dataOffset);
-            if (!isValidUdsSid(sid))
-                return DecodeStatus::Ignored;
-        }
+        // Require at least the SID byte to be present before opening a session.
+        if (dataOffset >= frame.getLength())
+            return DecodeStatus::Ignored;
+
+        if (!isValidUdsSid(frame.getByte(dataOffset)))
+            return DecodeStatus::Ignored;
 
         IsotpSession& session = m_sessions[key];
         session.data = QByteArray();

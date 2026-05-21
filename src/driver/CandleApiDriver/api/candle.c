@@ -36,7 +36,7 @@ bool candle_log_verbose = false;
 
 static void candle_logf(const wchar_t *fmt, ...)
 {
-    if (candle_log_fn == NULL || !candle_log_verbose) {
+    if (candle_log_fn == NULL) {
         return;
     }
 
