@@ -72,6 +72,9 @@ GrIPInterface::GrIPInterface(GrIPDriver *driver, int index, int channel_idx, GrI
 
     _lastStateMsec = QDateTime::currentMSecsSinceEpoch();
     _lastReadMsec = QDateTime::currentMSecsSinceEpoch();
+
+    if (m_GrIPHandler)
+        refreshCapabilities();
 }
 
 GrIPInterface::~GrIPInterface()
@@ -86,7 +89,7 @@ QString GrIPInterface::getDetailsStr() const
     }
     if (_manufacturer == CANIL_CAN)
     {
-        return _config.supports_canfd
+        return (_deviceCaps & GRIP_CAP_CAN_FD)
                    ? tr("CANIL with CANFD support")
                    : tr("CANIL with standard CAN support");
     }
@@ -108,27 +111,42 @@ QList<CanTiming> GrIPInterface::getAvailableBitrates()
     QList<CanTiming> retval;
 
     if (_manufacturer != GrIPInterface::CANIL_CAN)
-    {
         return retval;
-    }
 
-    const QList<unsigned> bitrates = {10000, 20000, 50000, 100000, 125000, 250000, 500000, 800000, 1000000};
-    const QList<unsigned> bitrates_fd = {2000000, 5000000};
-    const QList<unsigned> samplePoints = {875};
-    const QList<unsigned> samplePoints_fd = {750};
+    struct RateEntry { uint32_t rate; uint32_t capBit; };
+    static constexpr RateEntry kCanRates[] = {
+        {   10000, GRIP_CAP_CAN_BAUD_10K  },
+        {   20000, GRIP_CAP_CAN_BAUD_20K  },
+        {   50000, GRIP_CAP_CAN_BAUD_50K  },
+        {  100000, GRIP_CAP_CAN_BAUD_100K },
+        {  125000, GRIP_CAP_CAN_BAUD_125K },
+        {  250000, GRIP_CAP_CAN_BAUD_250K },
+        {  500000, GRIP_CAP_CAN_BAUD_500K },
+        {  800000, 0                       },  // no capability bit — include only in fallback
+        { 1000000, GRIP_CAP_CAN_BAUD_1M   },
+    };
+    static constexpr unsigned kFdRates[]       = {2000000, 5000000};
+    static constexpr unsigned kFdSamplePoints[] = {750, 750};
+
+    const bool filterByDevice = (_deviceCaps != 0);
+    const bool fd = supportsCanFD();
 
     unsigned i = 0;
-    for (unsigned br : bitrates)
+    for (auto &e : kCanRates)
     {
-        for (unsigned br_fd : bitrates_fd)
+        if (filterByDevice && e.capBit != 0 && !(_deviceCaps & e.capBit))
+            continue;
+        if (filterByDevice && e.capBit == 0)
+            continue;  // 800K has no firmware bit — skip when device caps are known
+
+        if (fd)
         {
-            for (unsigned sp : samplePoints)
-            {
-                for (unsigned sp_fd : samplePoints_fd)
-                {
-                    retval << CanTiming(i++, br, br_fd, sp, sp_fd);
-                }
-            }
+            for (size_t f = 0; f < std::size(kFdRates); ++f)
+                retval << CanTiming(i++, e.rate, kFdRates[f], 875, kFdSamplePoints[f]);
+        }
+        else
+        {
+            retval << CanTiming(i++, e.rate, 0, 875, 0);
         }
     }
 
@@ -172,7 +190,7 @@ bool GrIPInterface::supportsTimingConfiguration()
 
 bool GrIPInterface::supportsCanFD()
 {
-    return _config.supports_canfd;
+    return (_deviceCaps != 0) ? ((_deviceCaps & GRIP_CAP_CAN_FD) != 0) : _config.supports_canfd;
 }
 
 bool GrIPInterface::supportsTripleSampling()
@@ -192,29 +210,38 @@ BusType GrIPInterface::busType() const
 
 uint32_t GrIPInterface::getCapabilities()
 {
-    uint32_t retval = 0;
+    if (_deviceCaps == 0)
+    {
+        // Not yet queried — return a safe default so the UI is not completely blank.
+        if (_isLin)
+            return 0;
+        uint32_t retval = BusInterface::capability_auto_restart | BusInterface::capability_listen_only;
+        if (_config.supports_canfd)
+            retval |= BusInterface::capability_canfd;
+        return retval;
+    }
 
     if (_isLin)
-        return 0;
-
-    if (_manufacturer == GrIPInterface::CANIL_CAN)
     {
-        retval =
-            BusInterface::capability_auto_restart |
-            BusInterface::capability_listen_only;
+        uint32_t retval = 0;
+        if (_deviceCaps & GRIP_CAP_LIN_MODE_MASTER) retval |= BusInterface::capability_lin_master;
+        if (_deviceCaps & GRIP_CAP_LIN_MODE_SLAVE)  retval |= BusInterface::capability_lin_slave;
+        return retval;
     }
 
-    if (supportsCanFD())
-    {
-        retval |= BusInterface::capability_canfd;
-    }
-
-    if (supportsTripleSampling())
-    {
-        retval |= BusInterface::capability_triple_sampling;
-    }
-
+    uint32_t retval = 0;
+    if (_deviceCaps & GRIP_CAP_CAN_LISTEN_ONLY) retval |= BusInterface::capability_listen_only;
+    if (_deviceCaps & GRIP_CAP_CAN_ABOM)        retval |= BusInterface::capability_auto_restart;
+    if (_deviceCaps & GRIP_CAP_CAN_FD)          retval |= BusInterface::capability_canfd;
     return retval;
+}
+
+void GrIPInterface::refreshCapabilities()
+{
+    const uint8_t busType = _isLin ? 1u : 0u;
+    m_GrIPHandler->RequestChannelCapabilities(busType, static_cast<uint8_t>(_channel_idx));
+    QThread::msleep(50);
+    _deviceCaps = m_GrIPHandler->GetChannelCapabilities(busType, static_cast<uint8_t>(_channel_idx));
 }
 
 bool GrIPInterface::updateStatistics()
@@ -302,6 +329,8 @@ void GrIPInterface::open()
         _isOffline = true;
         return;
     }
+
+    refreshCapabilities();
 
     // Poll for the firmware version string populated by GrIPHandler after
     // connecting. Typically available within one or two iterations.

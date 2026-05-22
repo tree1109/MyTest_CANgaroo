@@ -23,6 +23,32 @@ enum CANIL_CAN_State
     CAN_Off = 0, CAN_Stopped, CAN_Active, CAN_ErrorWarning, CAN_ErrorPassiv
 };
 
+// CAN channel capability bits (busType == 0)
+inline constexpr uint32_t GRIP_CAP_CAN_BAUD_10K    = (1u <<  0);
+inline constexpr uint32_t GRIP_CAP_CAN_BAUD_20K    = (1u <<  1);
+inline constexpr uint32_t GRIP_CAP_CAN_BAUD_50K    = (1u <<  2);
+inline constexpr uint32_t GRIP_CAP_CAN_BAUD_100K   = (1u <<  3);
+inline constexpr uint32_t GRIP_CAP_CAN_BAUD_125K   = (1u <<  4);
+inline constexpr uint32_t GRIP_CAP_CAN_BAUD_250K   = (1u <<  5);
+inline constexpr uint32_t GRIP_CAP_CAN_BAUD_500K   = (1u <<  6);
+inline constexpr uint32_t GRIP_CAP_CAN_BAUD_1M     = (1u <<  7);
+inline constexpr uint32_t GRIP_CAP_CAN_LISTEN_ONLY = (1u <<  8);
+inline constexpr uint32_t GRIP_CAP_CAN_ABOM        = (1u <<  9);
+inline constexpr uint32_t GRIP_CAP_CAN_TXECHO      = (1u << 10);
+inline constexpr uint32_t GRIP_CAP_CAN_FD          = (1u << 11);
+
+// LIN channel capability bits (busType == 1)
+inline constexpr uint32_t GRIP_CAP_LIN_BAUD_1000   = (1u <<  0);
+inline constexpr uint32_t GRIP_CAP_LIN_BAUD_2400   = (1u <<  1);
+inline constexpr uint32_t GRIP_CAP_LIN_BAUD_9600   = (1u <<  2);
+inline constexpr uint32_t GRIP_CAP_LIN_BAUD_19200  = (1u <<  3);
+inline constexpr uint32_t GRIP_CAP_LIN_BAUD_20000  = (1u <<  4);
+inline constexpr uint32_t GRIP_CAP_LIN_BAUD_CUSTOM = (1u <<  5);
+inline constexpr uint32_t GRIP_CAP_LIN_MODE_MASTER = (1u <<  8);
+inline constexpr uint32_t GRIP_CAP_LIN_MODE_SLAVE  = (1u <<  9);
+inline constexpr uint32_t GRIP_CAP_LIN_PROTO_V1    = (1u << 16);
+inline constexpr uint32_t GRIP_CAP_LIN_PROTO_V2    = (1u << 17);
+
 /**
  * @brief High-level interface to a GrIP-capable device over a serial port.
  *
@@ -218,6 +244,27 @@ public:
      */
     void GpioSetOutput(uint16_t pinOutputState);
 
+    /**
+     * @brief Sends a SYSTEM_GET_CHANNEL_CAPABILITIES request to the device.
+     *
+     * The device responds asynchronously with DATA_CHANNEL_CAPABILITIES; the
+     * response is stored and also emitted via channelCapabilitiesReceived().
+     *
+     * @param busType  0 = CAN, 1 = LIN.
+     * @param channel  Zero-based channel index.
+     */
+    void RequestChannelCapabilities(uint8_t busType, uint8_t channel);
+
+    /**
+     * @brief Returns the last received capability bitmask for the given channel.
+     *
+     * Returns 0 if no response has been received yet for this busType/channel pair.
+     *
+     * @param busType  0 = CAN, 1 = LIN.
+     * @param channel  Zero-based channel index.
+     */
+    uint32_t GetChannelCapabilities(uint8_t busType, uint8_t channel) const;
+
     /** @return Last received GPIO pin state bitmask (bit N = state of pin N). */
     uint16_t GpioGetPinState() const;
 
@@ -254,6 +301,14 @@ signals:
      * @param analogValues 12-bit ADC readings, one per pin (index matches bit position).
      */
     void gpioUpdated(uint16_t pinState, QVector<uint16_t> analogValues);
+
+    /**
+     * @brief Emitted when a DATA_CHANNEL_CAPABILITIES packet is received.
+     * @param busType       0 = CAN, 1 = LIN.
+     * @param channel       Zero-based channel index.
+     * @param capabilities  Feature bitmask reported by the device.
+     */
+    void channelCapabilitiesReceived(uint8_t busType, uint8_t channel, uint32_t capabilities);
 
 private:
     /**
@@ -329,6 +384,10 @@ private:
 
     uint16_t m_GPIO_PinState = 0;         ///< Last received GPIO pin state bitmask.
     uint16_t m_GPIO_AnalogValues[8] = {}; ///< Last received ADC readings per pin.
+
+    /// Per-channel capability bitmasks received from the device.
+    /// Key: (busType << 8) | channel. Guarded by m_MutexData.
+    std::unordered_map<uint16_t, uint32_t> m_ChannelCapabilities;
 };
 
 

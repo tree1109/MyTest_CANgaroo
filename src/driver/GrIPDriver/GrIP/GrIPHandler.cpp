@@ -26,8 +26,9 @@
 
 #define SYSTEM_SEND_CAN_FRAME   30u // Transmit a CAN frame immediately
 #define SYSTEM_SET_LIN_DATA     31u
-#define SYSTEM_SEND_GPIO_CFG    32u // Configure GPIO pin directions and report cycle time
-#define SYSTEM_SET_GPIO_OUTPUT  33u // Set GPIO pin output states
+#define SYSTEM_SEND_GPIO_CFG            32u // Configure GPIO pin directions and report cycle time
+#define SYSTEM_SET_GPIO_OUTPUT          33u // Set GPIO pin output states
+#define SYSTEM_GET_CHANNEL_CAPABILITIES 34u // Request capability bitmask for a given channel
 
 // ---------------------------------------------------------------------------
 // CAN frame flag bits — stored in Protocol_CanFrame_t::Flags
@@ -203,7 +204,17 @@ typedef struct __attribute__((packed))
     uint16_t Voltage_mV[8]; // Measured voltage per pin in mV
 } Protocol_GpioStatus_t;
 
-#define DATA_REPORT_GPIO        252u
+#define DATA_REPORT_GPIO            252u
+#define DATA_CHANNEL_CAPABILITIES   251u
+
+// Payload for SYSTEM_GET_CHANNEL_CAPABILITIES (34) and incoming DATA_CHANNEL_CAPABILITIES (251).
+typedef struct __attribute__((packed))
+{
+    Protocol_SystemHeader_t Header;
+    uint8_t  BusType;       // 0 = CAN, 1 = LIN
+    uint8_t  Channel;       // Zero-based channel index
+    uint32_t Capabilities;  // Bitmask of supported features (request: ignored; response: filled by device)
+} Protocol_ChannelCapabilities_t;
 
 
 // ---------------------------------------------------------------------------
@@ -586,6 +597,32 @@ void GrIPHandler::GpioSetOutput(uint16_t pinOutputState)
 
     std::unique_lock<std::mutex> lck(m_MutexSerial);
     std::ignore = GrIP_Transmit(PROT_GrIP, MSG_SYSTEM_CMD, RET_OK, &p);
+}
+
+void GrIPHandler::RequestChannelCapabilities(uint8_t busType, uint8_t channel)
+{
+    Protocol_ChannelCapabilities_t req = {};
+
+    req.Header.Version = GRIP_HEADER_VERSION;
+    req.Header.Command = SYSTEM_GET_CHANNEL_CAPABILITIES;
+    req.Header.Length  = sizeof(Protocol_ChannelCapabilities_t) - sizeof(Protocol_SystemHeader_t);
+    req.Header.Data    = 0;
+
+    req.BusType   = busType;
+    req.Channel   = channel;
+
+    GrIP_Pdu_t p = {reinterpret_cast<uint8_t *>(&req), sizeof(Protocol_ChannelCapabilities_t)};
+
+    std::unique_lock<std::mutex> lck(m_MutexSerial);
+    std::ignore = GrIP_Transmit(PROT_GrIP, MSG_SYSTEM_CMD, RET_OK, &p);
+}
+
+uint32_t GrIPHandler::GetChannelCapabilities(uint8_t busType, uint8_t channel) const
+{
+    const uint16_t key = static_cast<uint16_t>((busType << 8) | channel);
+    std::unique_lock<std::mutex> lck(m_MutexData);
+    auto it = m_ChannelCapabilities.find(key);
+    return it != m_ChannelCapabilities.end() ? it->second : 0u;
 }
 
 void GrIPHandler::LinAddFrame(uint8_t ch, const BusMessage &msg, uint8_t frame_time)
@@ -1056,6 +1093,23 @@ void GrIPHandler::ProcessData(GrIP_Packet_t &packet, qint64 rxTimestamp_ms)
             const QVector<uint16_t> analogSnapshot(m_GPIO_AnalogValues, m_GPIO_AnalogValues + 8);
             lck.unlock();
             emit gpioUpdated(pinSnapshot, analogSnapshot);
+            break;
+        }
+
+        case DATA_CHANNEL_CAPABILITIES:
+        {
+            Protocol_ChannelCapabilities_t cap = {};
+            std::memcpy(&cap, packet.Data, std::min(sizeof(Protocol_ChannelCapabilities_t),
+                static_cast<size_t>(packet.RX_Header.Length) + sizeof(Protocol_SystemHeader_t)));
+
+            const uint16_t key = static_cast<uint16_t>((cap.BusType << 8) | cap.Channel);
+            m_ChannelCapabilities[key] = cap.Capabilities;
+
+            const uint8_t busType = cap.BusType;
+            const uint8_t channel = cap.Channel;
+            const uint32_t capabilities = cap.Capabilities;
+            lck.unlock();
+            emit channelCapabilitiesReceived(busType, channel, capabilities);
             break;
         }
 

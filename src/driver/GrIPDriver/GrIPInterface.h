@@ -137,4 +137,7 @@ private:
     qint64 _lastReadMsec;  ///< Timestamp of last readMessage() execution; used for rate-limiting.
 
     GrIPHandler *m_GrIPHandler;
+
+    uint32_t _deviceCaps{0};
+    void refreshCapabilities();
 };

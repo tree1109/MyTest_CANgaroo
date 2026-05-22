@@ -78,6 +78,7 @@ void GenericLinSetupPage::onShowInterfacePage(SetupDialog &dlg, MeasurementInter
     _network = dlg.currentNetwork();
 
     BusInterface *intf = backend().getInterfaceById(_mi->busInterface());
+    _linCaps = intf->getCapabilities();
     ui->laDriver->setText(intf->getDriver()->getName());
     ui->laInterface->setText(QString("%1 - [ID: %2]").arg(intf->getName()).arg(intf->getId()));
     ui->laInterfaceDetails->setText(intf->getDetailsStr());
@@ -183,11 +184,35 @@ void GenericLinSetupPage::populateLdfCombo()
     // Trigger info update for the selected LDF
     updateLdfInfo(selectIdx);
 
-    // Restore node mode radio buttons and slave node enabled state
-    const bool isSlave = _mi->linNodeMode() == LinNodeMode::Slave;
-    ui->rbMaster->setChecked(!isSlave);
-    ui->rbSlave->setChecked(isSlave);
-    ui->cbSlaveNode->setEnabled(isSlave);
+    // Restore node mode radio buttons and slave node enabled state.
+    // If the device only supports one mode, force it and disable the other radio.
+    const bool capMaster = (_linCaps & BusInterface::capability_lin_master) != 0;
+    const bool capSlave  = (_linCaps & BusInterface::capability_lin_slave)  != 0;
+    const bool forceMaster = capMaster && !capSlave;
+    const bool forceSlave  = capSlave  && !capMaster;
+
+    if (forceMaster)
+    {
+        ui->rbMaster->setChecked(true);
+        ui->rbSlave->setChecked(false);
+        _mi->setLinNodeMode(LinNodeMode::Master);
+    }
+    else if (forceSlave)
+    {
+        ui->rbSlave->setChecked(true);
+        ui->rbMaster->setChecked(false);
+        _mi->setLinNodeMode(LinNodeMode::Slave);
+    }
+    else
+    {
+        const bool isSlave = _mi->linNodeMode() == LinNodeMode::Slave;
+        ui->rbMaster->setChecked(!isSlave);
+        ui->rbSlave->setChecked(isSlave);
+    }
+
+    ui->rbMaster->setEnabled(!forceSlave);
+    ui->rbSlave->setEnabled(!forceMaster);
+    ui->cbSlaveNode->setEnabled(ui->rbSlave->isChecked());
 }
 
 void GenericLinSetupPage::updateLdfInfo(int ldfIndex)

@@ -34,6 +34,7 @@ private:
     MeasurementInterface    *_mi;
     MeasurementNetwork      *_network;
     bool                     _enableUiUpdates;
+    uint32_t                 _linCaps{0};
 
     void populateBaudrates();
     void populateProtocolVersions();
