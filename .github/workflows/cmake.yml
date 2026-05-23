@@ -378,6 +378,11 @@ jobs:
           cp src/driver/KvaserDriver/canlib-sdk/Bin/canlib32.dll dist/
           cp src/driver/PeakCanDriver/pcan-basic-api/x64/PCANBasic.dll dist/
 
+      - name: Bundle example scripts
+        run: |
+          mkdir -p dist/examples
+          cp examples/*.py dist/examples/ || true
+
       - name: Verify missing DLLs
         run: |
           EXE=$(ls dist/*.exe | head -n 1)

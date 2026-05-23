@@ -50,6 +50,7 @@
 #include "window/ScriptWindow/ScriptWindow.h"
 #include "window/ReplayWindow/ReplayWindow.h"
 #include "window/LinControlWindow/LinControlWindow.h"
+#include "window/GpioControlWindow/GpioControlWindow.h"
 #include "window/GatewayWindow/GatewayWindow.h"
 #include "window/SettingsDialog.h"
 
@@ -137,6 +138,7 @@ void MainWindow::initActions()
     connect(ui->actionScript_View, &QAction::triggered, this, [this]() { addScriptWidget(); });
     connect(ui->actionReplay_View, &QAction::triggered, this, [this]() { addReplayWidget(); });
     connect(ui->actionLin_Control_View, &QAction::triggered, this, [this]() { addLinControlWidget(); });
+    connect(ui->actionGpio_Control_View, &QAction::triggered, this, [this]() { addGpioControlWidget(); });
     connect(ui->actionSettings, &QAction::triggered, this, &MainWindow::showSettingsDialog);
 
     auto *actionStandaloneGraph = new QAction(tr("Standalone Graph"), this);
@@ -938,6 +940,12 @@ QDockWidget *MainWindow::addLinControlWidget(QMainWindow *parent)
 {
     return makeDock(tr("LIN Control"), QStringLiteral("dock_lin_control"),
                     new LinControlWindow(nullptr, backend()), parent);
+}
+
+QDockWidget *MainWindow::addGpioControlWidget(QMainWindow *parent)
+{
+    return makeDock(tr("GPIO Control"), QStringLiteral("dock_gpio_control"),
+                    new GpioControlWindow(nullptr, backend()), parent);
 }
 
 void MainWindow::setupDockFloatReparent(QDockWidget *dock, QMainWindow *innerParent)

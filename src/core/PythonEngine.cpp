@@ -166,6 +166,8 @@ PYBIND11_EMBEDDED_MODULE(cangaroo, m)
         .def_property_readonly("interface_id", &BusMessage::getInterfaceId)
         .def_property_readonly("timestamp",    &BusMessage::getFloatTimestamp)
         .def_property_readonly("is_rx",        &BusMessage::isRX)
+        .def_property_readonly("is_lin_sleep",  &BusMessage::isLinSleepFrame)
+        .def_property_readonly("is_lin_wakeup", &BusMessage::isLinWakeupFrame)
         .def("get_byte", &BusMessage::getByte)
         .def("set_byte", &BusMessage::setByte)
         .def("get_data", [](const BusMessage &msg) -> py::bytes
@@ -213,6 +215,22 @@ PYBIND11_EMBEDDED_MODULE(cangaroo, m)
     }, py::arg("id"), py::arg("dlc") = 0);
 
     // --- send / receive ---
+
+    m.def("lin_sleep", [](uint16_t interface_id)
+    {
+        if (!g_activeEngine) { return; }
+        BusInterface *intf = g_activeEngine->backend().getInterfaceById(interface_id);
+        if (intf)
+            intf->sendLinSleepWakeup(false);
+    }, py::arg("interface_id") = 0);
+
+    m.def("lin_wakeup", [](uint16_t interface_id)
+    {
+        if (!g_activeEngine) { return; }
+        BusInterface *intf = g_activeEngine->backend().getInterfaceById(interface_id);
+        if (intf)
+            intf->sendLinSleepWakeup(true);
+    }, py::arg("interface_id") = 0);
 
     m.def("send", [](BusMessage &msg, uint16_t interface_id)
     {
@@ -393,6 +411,9 @@ PYBIND11_EMBEDDED_MODULE(cangaroo, m)
             py::dict d;
             d["id"]   = id;
             d["name"] = g_activeEngine->backend().getInterfaceName(id).toStdString();
+            BusInterface *intf = g_activeEngine->backend().getInterfaceById(id);
+            d["bus_type"] = (intf && intf->busType() == BusType::LIN) ? "LIN" : "CAN";
+            d["state"]    = intf ? intf->getStateText().toStdString() : "";
             result.append(d);
         }
         return result;
@@ -403,6 +424,13 @@ PYBIND11_EMBEDDED_MODULE(cangaroo, m)
         if (!g_activeEngine) { return ""; }
         return g_activeEngine->backend().getInterfaceName(id).toStdString();
     });
+
+    m.def("interface_state", [](uint16_t interface_id) -> std::string
+    {
+        if (!g_activeEngine) { return ""; }
+        BusInterface *intf = g_activeEngine->backend().getInterfaceById(interface_id);
+        return intf ? intf->getStateText().toStdString() : "";
+    }, py::arg("interface_id"));
 
     // --- Logging ---
 

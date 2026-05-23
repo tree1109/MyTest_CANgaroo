@@ -629,14 +629,14 @@ void GrIPHandler::LinSetConfig(uint8_t ch, uint32_t baud, bool master, uint8_t p
     std::ignore = GrIP_Transmit(PROT_GrIP, MSG_SYSTEM_CMD, RET_OK, &p);
 }
 
-void GrIPHandler::GpioSetConfig(uint8_t cycleTime_ms, uint16_t pinDirection)
+void GrIPHandler::GpioSetConfig(bool enable, uint8_t cycleTime_ms, uint16_t pinDirection)
 {
     Protocol_GPIO_Config_t cfg = {};
 
     cfg.Header.Version = GRIP_HEADER_VERSION;
     cfg.Header.Command = SYSTEM_SEND_GPIO_CFG;
     cfg.Header.Length  = sizeof(Protocol_GPIO_Config_t) - sizeof(Protocol_SystemHeader_t);
-    cfg.Header.Data    = 0;
+    cfg.Header.Data    = enable ? 1u : 0u;
 
     cfg.CycleTime_ms = cycleTime_ms;
     cfg.PinDirection = pinDirection;

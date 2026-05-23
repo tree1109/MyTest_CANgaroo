@@ -252,7 +252,7 @@ public:
      * @param cycleTime_ms  Auto-report interval in ms (0 = disabled, clamped to >= 5 by firmware).
      * @param pinDirection  Bitmask: bit N = 1 → output, 0 → input.
      */
-    void GpioSetConfig(uint8_t cycleTime_ms, uint16_t pinDirection);
+    void GpioSetConfig(bool enable, uint8_t cycleTime_ms, uint16_t pinDirection);
 
     /**
      * @brief Sends a SYSTEM_SET_GPIO_OUTPUT command to set digital output levels.

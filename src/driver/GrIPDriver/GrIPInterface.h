@@ -112,6 +112,7 @@ public:
     QString getVersion() override;
 
     int getIfIndex();
+    GrIPHandler *handler() const { return m_GrIPHandler; }
 
 private slots:
     void handleSerialError(QSerialPort::SerialPortError error);

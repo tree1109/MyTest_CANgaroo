@@ -176,6 +176,7 @@
      <addaction name="actionScript_View"/>
      <addaction name="actionReplay_View"/>
      <addaction name="actionLin_Control_View"/>
+     <addaction name="actionGpio_Control_View"/>
     </widget>
     <addaction name="menu_New"/>
    </widget>
@@ -369,6 +370,11 @@
   <action name="actionLin_Control_View">
    <property name="text">
     <string>LIN Control</string>
+   </property>
+  </action>
+  <action name="actionGpio_Control_View">
+   <property name="text">
+    <string>GPIO Control</string>
    </property>
   </action>
   <action name="actionRestore_Window">

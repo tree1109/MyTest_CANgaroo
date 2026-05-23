@@ -408,13 +408,13 @@ void GrIPInterface::open()
 
                     // TX when this node is the publisher of the frame, RX otherwise.
                     const bool isRX = isMaster ? entry.isMasterPublisher : (entry.publisherName == slaveNode);
-                    qDebug() << "[LIN]" << (isMaster ? "Master" : "Slave")
+                    /*qDebug() << "[LIN]" << (isMaster ? "Master" : "Slave")
                              << "AddFrame:" << entry.frameName
                              << "ID:" << Qt::hex << entry.frameId
                              << "DLC:" << Qt::dec << entry.dlc
                              << "Publisher:" << entry.publisherName
                              << "Direction:" << (isRX ? "RX" : "TX")
-                             << "Delay:" << entry.delayMs << "ms";
+                             << "Delay:" << entry.delayMs << "ms";*/
 
                     BusMessage msg;
                     msg.setId(entry.frameId);

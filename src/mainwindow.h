@@ -81,6 +81,7 @@ public slots:
     QDockWidget *addScriptWidget(QMainWindow *parent = nullptr);
     QDockWidget *addReplayWidget(QMainWindow *parent = nullptr);
     QDockWidget *addLinControlWidget(QMainWindow *parent = nullptr);
+    QDockWidget *addGpioControlWidget(QMainWindow *parent = nullptr);
 
     bool showSetupDialog();
     void showAboutDialog();
