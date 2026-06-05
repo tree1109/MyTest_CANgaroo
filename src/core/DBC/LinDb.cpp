@@ -69,6 +69,11 @@ QVector<LinScheduleEntry> LinDb::scheduleTableEntries(int tableIndex) const
 }
 double      LinDb::masterTimebaseMs()    const { return _masterTimebaseMs; }
 double      LinDb::masterJitterMs()      const { return _masterJitterMs; }
+
+LinDiagTiming LinDb::diagTiming(const QString &nodeName) const
+{
+    return _diagTimings.value(nodeName);
+}
 QString     LinDb::lastError()           const { return _lastError; }
 
 LinFrame *LinDb::frameById(uint8_t id) const
@@ -114,6 +119,17 @@ bool LinDb::loadFile(const QString &path)
     _slaveNodes.clear();
     for (const auto &slave : ldf.nodes.slaves)
         _slaveNodes.append(QString::fromStdString(slave));
+
+    _diagTimings.clear();
+    for (const auto &attr : ldf.node_attributes)
+    {
+        LinDiagTiming t;
+        t.p2MinMs = static_cast<uint16_t>(attr.p2_min_s       * 1000.0);
+        t.stMinMs = static_cast<uint16_t>(attr.st_min_s       * 1000.0);
+        t.nAsMs   = static_cast<uint16_t>(attr.n_as_timeout_s * 1000.0);
+        t.nCrMs   = static_cast<uint16_t>(attr.n_cr_timeout_s * 1000.0);
+        _diagTimings.insert(QString::fromStdString(attr.name), t);
+    }
 
     _scheduleTableNames.clear();
     _scheduleTables.clear();

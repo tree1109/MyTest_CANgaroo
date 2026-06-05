@@ -219,7 +219,20 @@ public:
      */
     void CanSetFdConfig(uint8_t ch, uint32_t arbBaud, uint32_t dataBaud, bool listen, bool echoTx, bool abom);
 
-    void LinSetConfig(uint8_t ch, uint32_t baud, bool master, uint8_t protocol, uint8_t timebase, uint16_t jitter_us);
+    void LinSetConfig(uint8_t ch, uint32_t baud, bool master, uint8_t protocol,
+                      uint8_t timebase, uint16_t jitter_us,
+                      uint16_t diagSTmin_ms = 0, uint16_t diagP2min_ms = 25,
+                      uint16_t diagNAs_ms = 25, uint16_t diagNCr_ms = 1000);
+
+    /**
+     * @brief Send a LIN transport-layer diagnostic master request (0x3C).
+     *
+     * @param ch   Zero-based LIN channel index.
+     * @param nad  Node Address for Diagnostics.
+     * @param data Payload: SID followed by request data bytes.
+     * @param len  Total payload length (1–89 bytes).
+     */
+    void LinSendDiagRequest(uint8_t ch, uint8_t nad, const uint8_t *data, uint8_t len);
 
     void LinAddFrame(uint8_t ch, const BusMessage &msg, uint8_t frame_time);
 

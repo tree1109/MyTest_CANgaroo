@@ -251,6 +251,14 @@ PYBIND11_EMBEDDED_MODULE(cangaroo, m)
             intf->sendLinSleepWakeup(true);
     }, py::arg("interface_id") = 0);
 
+    m.def("lin_set_schedule_table", [](uint8_t table_index, uint16_t interface_id)
+    {
+        if (!g_activeEngine) { return; }
+        BusInterface *intf = g_activeEngine->backend().getInterfaceById(interface_id);
+        if (intf)
+            intf->setLinScheduleTable(table_index);
+    }, py::arg("table_index"), py::arg("interface_id") = 0);
+
     m.def("send", [](BusMessage &msg, uint16_t interface_id)
     {
         if (!g_activeEngine) { return; }

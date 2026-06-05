@@ -174,10 +174,10 @@ Schedule_tables {
     // Normal operation: all four frames polled at equal 10 ms intervals.
     // Total cycle: 40 ms  →  Slave1 at 25 Hz, Slave2 at 25 Hz.
     NormalOperation {
-        MasterToSlave1  delay 10 ms;
-        Slave1ToMaster  delay 10 ms;
-        MasterToSlave2  delay 10 ms;
-        Slave2ToMaster  delay 10 ms;
+        MasterToSlave1  delay 20 ms;
+        Slave1ToMaster  delay 20 ms;
+        MasterToSlave2  delay 20 ms;
+        Slave2ToMaster  delay 20 ms;
     }
 
     // Fast motor control: Slave1 polled twice per cycle for tighter speed loop,

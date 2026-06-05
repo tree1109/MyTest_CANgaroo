@@ -85,6 +85,9 @@ public:
     virtual bool isOpen();
 
     virtual void sendLinSleepWakeup(bool wakeup) { Q_UNUSED(wakeup) }
+    virtual void setLinScheduleTable(uint8_t tableIndex) { Q_UNUSED(tableIndex) }
+    virtual void sendLinDiagRequest(uint8_t nad, const uint8_t *data, uint8_t len)
+    { Q_UNUSED(nad); Q_UNUSED(data); Q_UNUSED(len); }
     virtual void sendMessage(const BusMessage &msg) = 0;
     virtual bool readMessage(QList<BusMessage> &msglist, unsigned int timeout_ms) = 0;
 

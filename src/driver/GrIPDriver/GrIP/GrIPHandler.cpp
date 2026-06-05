@@ -50,6 +50,7 @@
 #define SYSTEM_GET_CHANNEL_CAPABILITIES 34u // Request capability bitmask for a given channel
 #define SYSTEM_SEND_CANFD_CFG           35u // Configure CAN FD channel (arb + data phase baudrates)
 #define SYSTEM_LIN_SLEEP_WAKEUP         36u // Put LIN channel to sleep or wake it up
+#define SYSTEM_LIN_DIAG_REQ             37u // LIN transport-layer diagnostic master request (0x3C/0x3D)
 
 #define LIN_SLEEP_WAKEUP_ACTION_SLEEP   0u
 #define LIN_SLEEP_WAKEUP_ACTION_WAKEUP  1u
@@ -178,12 +179,16 @@ typedef struct __attribute__((packed))
 typedef struct __attribute__((packed))
 {
     Protocol_SystemHeader_t Header;
-    uint8_t Channel;
+    uint8_t  Channel;
     uint16_t Baudrate;
-    uint8_t Timebase;
+    uint8_t  Timebase;
     uint16_t Jitter;
-    uint8_t Mode;
-    uint8_t Protocol;
+    uint8_t  Mode;
+    uint8_t  Protocol;
+    uint16_t DiagSTmin_ms;   // Min separation between CF frames (0 = no gap)
+    uint16_t DiagP2min_ms;   // Min delay before the 0x3D response slot
+    uint16_t DiagNAs_ms;     // TX frame abort timeout
+    uint16_t DiagNCr_ms;     // Response (0x3D) wait timeout
 } Protocol_LinConfig_t;
 
 typedef struct __attribute__((packed))
@@ -625,26 +630,58 @@ void GrIPHandler::CanSetFdConfig(uint8_t ch, uint32_t arbBaud, uint32_t dataBaud
     std::ignore = GrIP_Transmit(PROT_GrIP, MSG_SYSTEM_CMD, RET_OK, &p);
 }
 
-void GrIPHandler::LinSetConfig(uint8_t ch, uint32_t baud, bool master, uint8_t protocol, uint8_t timebase, uint16_t jitter_us)
+void GrIPHandler::LinSetConfig(uint8_t ch, uint32_t baud, bool master, uint8_t protocol,
+                               uint8_t timebase, uint16_t jitter_us,
+                               uint16_t diagSTmin_ms, uint16_t diagP2min_ms,
+                               uint16_t diagNAs_ms, uint16_t diagNCr_ms)
 {
     Protocol_LinConfig_t cfg = {};
 
     cfg.Header.Version = GRIP_HEADER_VERSION;
     cfg.Header.Command = SYSTEM_SEND_LIN_CFG;
-    cfg.Header.Length = sizeof(Protocol_LinConfig_t) - sizeof(Protocol_SystemHeader_t);
-    cfg.Header.Data = 0;
+    cfg.Header.Length  = sizeof(Protocol_LinConfig_t) - sizeof(Protocol_SystemHeader_t);
+    cfg.Header.Data    = 0;
 
-    cfg.Channel = ch;
-    cfg.Baudrate = baud;
-    cfg.Mode = master ? 0 : 1;
-    cfg.Protocol = protocol;
-    cfg.Timebase = timebase;
-    cfg.Jitter = jitter_us;
+    cfg.Channel      = ch;
+    cfg.Baudrate     = static_cast<uint16_t>(baud);
+    cfg.Mode         = master ? 0u : 1u;
+    cfg.Protocol     = protocol;
+    cfg.Timebase     = timebase;
+    cfg.Jitter       = jitter_us;
+    cfg.DiagSTmin_ms = diagSTmin_ms;
+    cfg.DiagP2min_ms = diagP2min_ms;
+    cfg.DiagNAs_ms   = diagNAs_ms;
+    cfg.DiagNCr_ms   = diagNCr_ms;
 
     GrIP_Pdu_t p = {reinterpret_cast<uint8_t *>(&cfg), sizeof(Protocol_LinConfig_t)};
 
     std::unique_lock<std::mutex> lck(m_MutexSerial);
+    std::ignore = GrIP_Transmit(PROT_GrIP, MSG_SYSTEM_CMD, RET_OK, &p);
+}
 
+void GrIPHandler::LinSendDiagRequest(uint8_t ch, uint8_t nad, const uint8_t *data, uint8_t len)
+{
+    if (!data || len == 0)
+        return;
+
+    // Wire layout after the 4-byte system header: [Channel, NAD, SID, d0, ...]
+    // Total PDU = header (4) + Channel (1) + NAD (1) + payload (len)
+    const uint16_t pduLen = static_cast<uint16_t>(sizeof(Protocol_SystemHeader_t) + 2u + len);
+    std::vector<uint8_t> buf(pduLen, 0u);
+
+    Protocol_SystemHeader_t *hdr = reinterpret_cast<Protocol_SystemHeader_t *>(buf.data());
+    hdr->Version = GRIP_HEADER_VERSION;
+    hdr->Command = SYSTEM_LIN_DIAG_REQ;
+    hdr->Length  = static_cast<uint8_t>(2u + len);  // Channel + NAD + payload
+    hdr->Data    = 0u;
+
+    buf[sizeof(Protocol_SystemHeader_t) + 0] = ch;
+    buf[sizeof(Protocol_SystemHeader_t) + 1] = nad;
+    std::memcpy(buf.data() + sizeof(Protocol_SystemHeader_t) + 2, data, len);
+
+    GrIP_Pdu_t p = {buf.data(), pduLen};
+
+    std::unique_lock<std::mutex> lck(m_MutexSerial);
     std::ignore = GrIP_Transmit(PROT_GrIP, MSG_SYSTEM_CMD, RET_OK, &p);
 }
 
@@ -1246,7 +1283,7 @@ void GrIPHandler::WorkerThread()
     // QSerialPort must be created on the thread that uses it.
     m_SerialPort = new QSerialPort();
     m_SerialPort->setPortName(m_PortName);
-    m_SerialPort->setBaudRate(4000000);
+    m_SerialPort->setBaudRate(3000000);
     m_SerialPort->setDataBits(QSerialPort::Data8);
     m_SerialPort->setParity(QSerialPort::NoParity);
     m_SerialPort->setStopBits(QSerialPort::OneStop);

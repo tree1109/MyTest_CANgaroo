@@ -29,6 +29,14 @@ class LinFrame;
 
 using LinFrameMap = QMap<uint8_t, LinFrame*>;
 
+struct LinDiagTiming
+{
+    uint16_t p2MinMs  {25};
+    uint16_t stMinMs  {0};
+    uint16_t nAsMs    {1000};
+    uint16_t nCrMs    {1000};
+};
+
 struct LinScheduleEntry
 {
     uint8_t frameId          {0};
@@ -64,6 +72,9 @@ public:
     QStringList scheduleTableNames() const;
     QVector<LinScheduleEntry> scheduleTableEntries(int tableIndex) const;
 
+    // Diagnostic timings for a node (returns defaults if node not found)
+    LinDiagTiming diagTiming(const QString &nodeName) const;
+
     // Frame access
     LinFrame           *frameById(uint8_t id) const;
     LinFrame           *frameByName(const QString &name) const;
@@ -83,6 +94,7 @@ private:
     LinFrameMap _frames;
     QStringList _scheduleTableNames;
     QVector<QVector<LinScheduleEntry>> _scheduleTables;
+    QMap<QString, LinDiagTiming> _diagTimings;
     double      _masterTimebaseMs {0.0};
     double      _masterJitterMs   {0.0};
     QString     _lastError;
