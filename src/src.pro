@@ -64,10 +64,19 @@ include($$PWD/window/LinControlWindow/LinControlWindow.pri)
 include($$PWD/window/GpioControlWindow/GpioControlWindow.pri)
 include($$PWD/helpers/helpers.pri)
 
+# PKGCONFIG += python3-embed
+# unix:INCLUDEPATH += /usr/include/pybind11
+# win32:INCLUDEPATH += $$system(python3 -c "import pybind11; print(pybind11.get_include())")
+# TEMP: For running.
+win32 {
+    PYTHON_INCLUDE_PATH = $$system(python -c \"import sysconfig; print(sysconfig.get_path(\'include\'))\")
+    PYBIND11_INCLUDE_PATH = $$system(python -c \"import pybind11; print(pybind11.get_include())\")
 
-PKGCONFIG += python3-embed
-unix:INCLUDEPATH += /usr/include/pybind11
-win32:INCLUDEPATH += $$system(python3 -c "import pybind11; print(pybind11.get_include())")
+    PYTHON_PATH = $$PYTHON_INCLUDE_PATH/..
+    INCLUDEPATH += $$PYTHON_INCLUDE_PATH
+    LIBS += -L$$PYTHON_PATH/libs -lpython314
+    INCLUDEPATH += $$PYBIND11_INCLUDE_PATH
+}
 
 unix:PKGCONFIG += libnl-3.0
 unix:PKGCONFIG += libnl-route-3.0

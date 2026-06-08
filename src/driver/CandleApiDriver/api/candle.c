@@ -176,7 +176,8 @@ static int candle_scan_guid(candle_list_t *l, const wchar_t *guid_str, unsigned 
 static int candle_scan_vidpid(candle_list_t *l, uint16_t vid, uint16_t pid, unsigned existing)
 {
     wchar_t hwid_prefix[32];
-    _snwprintf(hwid_prefix, 32, L"USB\\VID_%04X&PID_%04X", vid, pid);
+    // _snwprintf(hwid_prefix, 32, L"USB\\VID_%04X&PID_%04X", vid, pid);
+    _snwprintf_s(hwid_prefix, 32, INT32_MAX, L"USB\\VID_%04X&PID_%04X", vid, pid);
 
     /* Enumerate USB device instances (not interfaces) so we can read hardware IDs. */
     HDEVINFO hdi = SetupDiGetClassDevs(NULL, L"USB", NULL,
