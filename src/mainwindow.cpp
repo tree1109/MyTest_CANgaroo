@@ -71,6 +71,8 @@
 
 #ifdef TINYCAN_DRIVER
 #include "driver/TinyCanDriver/TinyCanDriver.h"
+
+#include <driver/FakeCanDriver/FakeCanDriver.h>
 #endif
 
 #ifdef PEAKCAN_DRIVER
@@ -253,6 +255,8 @@ void MainWindow::initDrivers()
     if (tinyCanEnabled)
         Backend::instance().addCanDriver(*(new TinyCanDriver(Backend::instance())));
 #endif
+
+    Backend::instance().addCanDriver(*(new FakeCanDriver(Backend::instance())));
 }
 
 void MainWindow::initGeometry()

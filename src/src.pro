@@ -122,5 +122,7 @@ win32:zscanfd {
     include($$PWD/driver/ZsCanFdDriver/ZsCanFdDriver.pri)
 }
 
+include($$PWD/driver/FakeCanDriver/FakeCanDriver.pri)
+
 DISTFILES += \
     assets/filter-symbolic.svg
