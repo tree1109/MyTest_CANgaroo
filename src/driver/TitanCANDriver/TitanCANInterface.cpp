@@ -319,8 +319,7 @@ bool TitanCANInterface::readMessage(QList<BusMessage> &msglist, unsigned int tim
 
                 // Timestamp.
                 {
-                    constexpr uint64_t MS_TO_US = 1000;
-                    const uint64_t device_us = frame.Timestamp * MS_TO_US;
+                    const uint64_t device_us = frame.Timestamp * 1000ul;
                     const uint64_t total_us = device_us + _canOpenOpenTime_us;
                     msg.setTimestamp_us(total_us);
                 }
@@ -331,18 +330,24 @@ bool TitanCANInterface::readMessage(QList<BusMessage> &msglist, unsigned int tim
             _stats.rx_count++;
             addFrameBits(msg);
         }
+        else {
+            break;
+        }
+        /*
         else if (status == CAN_ERR_READ_NO_MSG) {
             break;
         }
-        else {
+        else if (status == CAN_ERR_ERR) {
             const auto errorMessage = GetTitanCANStatusErrorMessage(status);
             log_error(QString("TitanCANInterface %1: CAN_Read failed: %2").arg(_name, errorMessage));
 
             // Record rx msg status.
             ++_stats.rx_errors;
-
+        }
+        else {
             return false;
         }
+        */
     }
 
     return true;
