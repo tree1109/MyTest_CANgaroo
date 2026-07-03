@@ -71,9 +71,11 @@
 
 #ifdef TINYCAN_DRIVER
 #include "driver/TinyCanDriver/TinyCanDriver.h"
-
-#include <driver/FakeCanDriver/FakeCanDriver.h>
 #endif
+
+#include "driver/FakeCanDriver/FakeCanDriver.h"
+
+#include "driver/TitanCANDriver/TitanCANDriver.h"
 
 #ifdef PEAKCAN_DRIVER
 #include "driver/PeakCanDriver/PeakCanDriver.h"
@@ -257,6 +259,8 @@ void MainWindow::initDrivers()
 #endif
 
     Backend::instance().addCanDriver(*(new FakeCanDriver(Backend::instance())));
+
+    Backend::instance().addCanDriver(*(new TitanCANDriver(Backend::instance())));
 }
 
 void MainWindow::initGeometry()

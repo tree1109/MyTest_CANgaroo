@@ -122,7 +122,12 @@ win32:zscanfd {
     include($$PWD/driver/ZsCanFdDriver/ZsCanFdDriver.pri)
 }
 
+# Fake can for test.
 include($$PWD/driver/FakeCanDriver/FakeCanDriver.pri)
 
+# TitanCAN driver.
+include($$PWD/driver/TitanCANDriver/TitanCANDriver.pri)
+
 DISTFILES += \
-    assets/filter-symbolic.svg
+    assets/filter-symbolic.svg \
+    driver/TitanCANDriver/TitanCANDriver.pri
